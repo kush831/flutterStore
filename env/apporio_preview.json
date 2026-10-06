@@ -1,0 +1,10 @@
+{
+  "FLAVOR": "apporioPreview",
+  "APP_NAME": "Apporio Preview - Store",
+  "BASE_URL": "https://msprojects.apporioproducts.com/multi-service-v3/public/",
+  "API_KEY": "wABpHkFl415IEyoKqOJT96uitRQrPs",
+  "SECRET_KEY": "9PeJiZgWN276uwYMtvsU1rnCX8pl3H",
+  "ONESIGNAL_APP_ID": "6cac6f5b-e88b-4cec-9649-9d15dcae5041",
+  "COLOR_PRIMARY": "#D62924",
+  "COLOR_PRIMARY_END": "#B71C1C"
+}

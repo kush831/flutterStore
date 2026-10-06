@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Preview (Android/iOS)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--flavor", "apporioPreview", "--dart-define-from-file=env/apporio_preview.json"]
+    },
+    {
+      "name": "Apporio (Android/iOS)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--flavor", "apporio", "--dart-define-from-file=env/apporio.json"]
+    },
+    {
+      "name": "Crave (Android/iOS)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--flavor", "crave", "--dart-define-from-file=env/crave.json"]
+    },
+    {
+      "name": "Web (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "args": ["--dart-define-from-file=env/apporio.json"]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    unawaited_futures: warning
+    avoid_print: warning
+  exclude:
+    - "**/*.g.dart"
+
+linter:
+  rules:
+    prefer_const_constructors: true
+    prefer_const_declarations: true
+    unawaited_futures: true
+    avoid_print: true
+    use_build_context_synchronously: true
+    prefer_final_locals: true
