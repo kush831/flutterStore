@@ -27,6 +27,12 @@ abstract final class EndPoints {
   static const manualAssignDriver = 'api/business-segment/manual-assign-driver';
   static const getDrivers = 'api/business-segment/get-drivers';
   static const pickupOtpVerification = 'api/business-segment/pickup-order-otp-verification';
+  static const getProducts = 'api/business-segment/get-products';
+  static const updateProductStatus = 'api/business-segment/update-product-status';
+  static const merchantCategories = 'api/business-segment/get-merchant-categories';
+  static const productStep1 = 'api/business-segment/get-product-step1';
+  static const saveProductStep1 = 'api/business-segment/save-product-step1';
+  static const subCategories = 'api/business-segment/get-sub-categories';
 
   /// Requests that are sent with publicKey / secretKey even when a token exists (Jetpack rule).
   static const publicKeyEndpoints = [appStrings,previewLogin];

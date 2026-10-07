@@ -71,4 +71,6 @@ class AppPrefs {
       await _p.remove(k);
     }
   }
+  bool get productsHintDismissed => _p.getBool('products_hint_dismissed') ?? false;
+  Future<void> setProductsHintDismissed(bool v) => _p.setBool('products_hint_dismissed', v);
 }

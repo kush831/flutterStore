@@ -190,7 +190,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               icon: Icons.error_outline_rounded,
               title: context.str('main_storedashboard_out_of_stock_title'),
               message: '${d.outOfStock} ${context.str('main_storedashboard_out_of_stock_message')}',
-              onTap: () => context.push(Routes.manageStock),
+              onTap: () => context.go(Routes.productsFiltered('OUTOFSTOCK')),
             ),
           if (d.outOfStock > 0 && d.lowStock > 0) const SizedBox(height: 8),
           if (d.lowStock > 0)
@@ -199,7 +199,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
               icon: Icons.warning_amber_rounded,
               title: context.str('main_storedashboard_low_stock_alert_title'),
               message: '${d.lowStock} ${context.str('main_storedashboard_low_stock_alert_message')}',
-              onTap: () => context.push(Routes.manageStock),
+              onTap: () => context.go(Routes.productsFiltered('LOWSTOCK')),
             ),
         ],
       );
@@ -584,7 +584,7 @@ class _QuickActions extends StatelessWidget {
     final items = <(IconData, String, VoidCallback)>[
       (Icons.receipt_long_rounded, 'main_storedashboard_quick_action_orders', () => context.go(Routes.orders)),
       (Icons.add_box_rounded, 'main_storedashboard_quick_action_add_product', () => context.push(Routes.productAdd)),
-      (Icons.inventory_2_rounded, 'main_storedashboard_quick_action_manage_stock', () => context.push(Routes.manageStock)),
+      (Icons.inventory_2_rounded, 'main_storedashboard_quick_action_manage_stock', () => context.go(Routes.productsFiltered('OUTOFSTOCK')),),
       (Icons.insights_rounded, 'main_storedashboard_quick_action_analytics', () => context.push(Routes.analytics)),
     ];
     return Card(

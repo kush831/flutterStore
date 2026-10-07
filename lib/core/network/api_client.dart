@@ -164,6 +164,19 @@ class ApiClient {
     );
   }
 
+  /// The raw bytes of an absolute URL. Sent WITHOUT the app's headers: the file may live on another host.
+  Future<Uint8List> download(String url) async {
+    try {
+      final res = await Dio().get<List<int>>(
+        url,
+        options: Options(responseType: ResponseType.bytes, receiveTimeout: const Duration(seconds: 30)),
+      );
+      return Uint8List.fromList(res.data ?? const <int>[]);
+    } on DioException catch (e) {
+      throw _map(e);
+    }
+  }
+
   // ── Internals ──────────────────────────────────────────────────────────────
 
   /// Nulls dropped, values as text (an int or bool can be passed straight in).

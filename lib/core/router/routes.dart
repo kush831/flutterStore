@@ -36,7 +36,9 @@ abstract final class Routes {
   static String orderDetail(String id) => '$orders/$id';
   static String productDetail(String id) => '$products/$id';
   static String ordersTab(String tab) => '$orders?tab=$tab';
-
+  /// /products?type=OUTOFSTOCK | LOWSTOCK
+  static String productsFiltered(String type) => '$products?type=$type';
+  static String productEdit(String id) => '$products/$id/edit';
   // ── developer tools (debug + Preview flavor only) ─────────────────────────
   static const devHub = '/dev';
   static const devApi = '/dev/api';

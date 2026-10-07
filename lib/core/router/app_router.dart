@@ -21,6 +21,8 @@ import '../../features/dev/strings_dev_page.dart';
 import '../../features/home/ui/home_screen.dart';
 import '../../features/orders/ui/order_detail_screen.dart';
 import '../../features/orders/ui/orders_screen.dart';
+import '../../features/products/ui/product_form_screen.dart';
+import '../../features/products/ui/products_screen.dart';
 import '../../features/splash/ui/splash_screen.dart';
 import '../../features/splash/ui/welcome_screen.dart';
 import '../auth/auth_controller.dart';
@@ -123,9 +125,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '${Routes.orders}/:id',
             builder: (_, s) => OrderDetailScreen(id: s.pathParameters['id'] ?? ''),
           ),
-          tab(Routes.products, 'Products'),
-          page(Routes.productAdd, 'Add product', back: Routes.products), // before ':id'
-          page(Routes.manageStock, 'Manage stock', back: Routes.products),
+          GoRoute(
+            path: Routes.products,
+            pageBuilder: (_, s) => NoTransitionPage(
+              key: s.pageKey,
+              child: ProductsScreen(typeParam: s.uri.queryParameters['type']),
+            ),
+          ),
+          GoRoute(path: Routes.productAdd, builder: (_, _) => const ProductFormScreen()),
+          GoRoute(path: '${Routes.products}/:id/edit', builder: (_, s) => ProductFormScreen(productId: s.pathParameters['id'])),
+          GoRoute(path: Routes.manageStock, builder: (_, _) => const ProductsScreen(typeParam: 'OUTOFSTOCK')), // before ':id'
           GoRoute(
             path: '${Routes.products}/:id',
             builder: (_, s) => PlaceholderScreen(title: 'Product ${s.pathParameters['id']}', fallbackRoute: Routes.products),

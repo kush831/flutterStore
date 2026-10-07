@@ -143,6 +143,61 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> with WidgetsBinding
   }
 }
 
+/// A horizontal row that scrolls the selected child into view (centered) whenever the selection changes.
+/// All children are built, so even a tab far off-screen can be reached.
+class _SelectedScrollRow extends StatefulWidget {
+  const _SelectedScrollRow({required this.padding, required this.selectedIndex, required this.children});
+
+  final EdgeInsets padding;
+  final int selectedIndex; // -1 = nothing selected
+  final List<Widget> children;
+
+  @override
+  State<_SelectedScrollRow> createState() => _SelectedScrollRowState();
+}
+
+class _SelectedScrollRowState extends State<_SelectedScrollRow> {
+  late List<GlobalKey> _keys = List.generate(widget.children.length, (_) => GlobalKey());
+
+  @override
+  void initState() {
+    super.initState();
+    _reveal(animate: false); // the first build already starts at the selected tab
+  }
+
+  @override
+  void didUpdateWidget(_SelectedScrollRow old) {
+    super.didUpdateWidget(old);
+    if (_keys.length != widget.children.length) _keys = List.generate(widget.children.length, (_) => GlobalKey());
+    if (old.selectedIndex != widget.selectedIndex || old.children.length != widget.children.length) _reveal();
+  }
+
+  void _reveal({bool animate = true}) {
+    final i = widget.selectedIndex;
+    if (i < 0 || i >= _keys.length) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _keys[i].currentContext;
+      if (!mounted || ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.5, // centered (it stops at the ends of the row)
+        duration: animate ? const Duration(milliseconds: 300) : Duration.zero,
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    padding: widget.padding,
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [for (var i = 0; i < widget.children.length; i++) KeyedSubtree(key: _keys[i], child: widget.children[i])],
+    ),
+  );
+}
+
 // ── tabs ─────────────────────────────────────────────────────────────────────
 
 class _Tabs extends StatelessWidget {
@@ -158,9 +213,9 @@ class _Tabs extends StatelessWidget {
     final primary = context.primary;
     return SizedBox(
       height: 56,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
+      child: _SelectedScrollRow(
         padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 0, vertical: 10),
+        selectedIndex: OrderTab.values.indexOf(selected),
         children: [
           for (final t in OrderTab.values)
             Padding(
@@ -208,9 +263,9 @@ class _SubFilters extends StatelessWidget {
     final primary = context.primary;
     return SizedBox(
       height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
+      child: _SelectedScrollRow(
         padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 0, vertical: 4),
+        selectedIndex: tab.subs.indexWhere((s) => s.status == selectedStatus),
         children: [
           for (final s in tab.subs)
             Padding(
