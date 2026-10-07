@@ -18,6 +18,7 @@ class DashboardData {
     this.salesToday = '',
     this.salesWeek = '',
     this.salesMonth = '',
+    this.address = '',
   });
 
   final String storeName;
@@ -38,6 +39,7 @@ class DashboardData {
   final String salesToday;
   final String salesWeek;
   final String salesMonth;
+  final String address;
 
   bool get membershipNeeded => membershipEnabled && !subscriptionActive;
 
@@ -58,6 +60,7 @@ class DashboardData {
     salesToday: salesToday,
     salesWeek: salesWeek,
     salesMonth: salesMonth,
+    address: address,
   );
 
   factory DashboardData.fromJson(JsonReader root) {
@@ -69,6 +72,7 @@ class DashboardData {
     final sales = d.sub('salesSummary');
     return DashboardData(
       storeName: s.text('name'),
+      address: s.text('address'),
       profileImage: s.text('profileImage'),
       currency: sales.str('currency') ?? s.text('currency'),
       isOpen: s.flag('isOpen'),

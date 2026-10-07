@@ -1,4 +1,5 @@
 import 'app_language.dart';
+import 'fallback_strings.dart';
 import 'missing_keys.dart';
 
 enum StringsSource { none, cache, server }
@@ -14,18 +15,24 @@ class AppStrings {
   bool get isLoaded => strings.isNotEmpty;
   bool get isRtl => AppLanguages.find(code)?.rtl ?? false;
 
-  /// The server text for [key].
-  ///  • not loaded yet  → '' (no flicker of raw keys while the first download runs)
-  ///  • key missing     → the key itself, and it is recorded in [MissingKeys]
-  /// Placeholders: `%s`, `%d` (in order) or `%1$s`, `%2$s` (numbered).
-  String get(String key, [List<Object?> args = const []]) {
+  /// The text for [key]:
+  ///  1. what the server sent                          (always wins)
+  ///  2. [fallback] given at the call site (strOr)
+  ///  3. the bundled English text in kFallbackStrings
+  ///  4. the key itself (a visible gap), or '' while nothing has loaded yet
+  /// A key the server did not send is still recorded in [MissingKeys] (see /dev/strings).
+  String get(String key, [List<Object?> args = const [], String? fallback]) {
+    // ignore: avoid_print
+    if (key.contains('customerInfo')) print('STR $key → server="${strings[key]}" fallback="${kFallbackStrings[key]}" loaded=$isLoaded');
     final raw = strings[key];
-    if (raw == null || raw.isEmpty) {
-      if (!isLoaded) return '';
-      MissingKeys.report(key);
-      return key;
+    if (raw != null && raw.trim().isNotEmpty && raw.trim() != key) {
+      return args.isEmpty ? raw : _format(raw, args);
     }
-    return args.isEmpty ? raw : _format(raw, args);
+
+    if (isLoaded) MissingKeys.report(key);
+    final fb = fallback ?? kFallbackStrings[key];
+    if (fb != null) return args.isEmpty ? fb : _format(fb, args);
+    return isLoaded ? key : '';
   }
 
   static final _placeholder = RegExp(r'%(?:(\d+)\$)?[sd]');

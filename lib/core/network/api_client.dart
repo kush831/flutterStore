@@ -54,13 +54,14 @@ class ApiClient {
     h['Accept'] = 'application/json';
 
     final isPublic = EndPoints.publicKeyEndpoints.any(o.path.contains);
-    if (session.token.isNotEmpty) {
-    h['Authorization'] = session.token;
-    }
-    else if (isPublic) {
+
+    if (isPublic) {
       h.remove('Authorization');
       h['publicKey'] = session.publicKey;
       h['secretKey'] = session.secretKey;
+    } else if (session.token.isNotEmpty) {
+      final t = session.token;
+      h['Authorization'] = t.startsWith('Bearer ') ? t : 'Bearer $t'; // "Bearer Bearer" kabhi nahi
     } else {
       h['publicKey'] = session.publicKey;
       h['secretKey'] = session.secretKey;

@@ -34,8 +34,8 @@ abstract final class NavDests {
     NavDest(
       route: Routes.home,
       labelKey: 'main_tabbar_home_label',
-      icon: Icons.space_dashboard_outlined,
-      selectedIcon: Icons.space_dashboard_rounded,
+      icon: Icons.home,
+      selectedIcon: Icons.home_filled,
       group: NavGroup.main,
       tab: true,
     ),
@@ -114,7 +114,7 @@ abstract final class NavDests {
     ),
     NavDest(
       route: Routes.more,
-      labelKey: 'settings_settings_title',
+      labelKey: 'main_tabbar_more_label',
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings_rounded,
       group: NavGroup.footer,

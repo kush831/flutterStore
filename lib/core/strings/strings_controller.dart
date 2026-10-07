@@ -53,6 +53,9 @@ class StringsController extends Notifier<AppStrings> {
     _fetchingFor = code;
     try {
       final fresh = await _repo.fetch();
+      if (kDebugMode) {
+        debugPrint('STRINGS server: ${fresh.length} keys · main_tabbar_orders_label = ${fresh['main_tabbar_orders_label'] ?? 'NOT IN RESPONSE'}');
+      }
       if (fresh.isEmpty || state.code != code) return false; // empty answer, or the user switched again
       if (!mapEquals(fresh, state.strings)) await _repo.writeCache(code, fresh);
       state = AppStrings(code: code, strings: fresh, source: StringsSource.server);

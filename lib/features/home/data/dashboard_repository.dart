@@ -15,7 +15,7 @@ class DashboardRepository {
 
   /// Throws AppException (the server's message when it refuses).
   Future<void> setStoreOpen(bool open) async {
-    await _api.postForm(EndPoints.updateStoreStatus, {'is_open': open ? '1' : '0'});
+    await _api.postForm(EndPoints.updateStoreStatus, {'is_open': open ? '1' : '2'});
   }
 }
 

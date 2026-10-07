@@ -129,7 +129,7 @@ class _BottomBar extends StatelessWidget {
               NavigationDestination(
                 icon: Icon(d.icon, color: tk.text2),
                 selectedIcon: Icon(d.selectedIcon, color: context.primary),
-                label: d == tabs.last ? context.str('main_tabbar_account_label') : context.str(d.labelKey),
+                label: d == tabs.last ? context.str('main_tabbar_more_label') : context.str(d.labelKey),
               ),
           ],
         ),
@@ -181,7 +181,7 @@ class _Rail extends ConsumerWidget {
                           Icon(d == current ? d.selectedIcon : d.icon, size: 22, color: d == current ? primary : tk.text2),
                           const SizedBox(height: 4),
                           Text(
-                            d == tabs.last ? context.str('main_tabbar_account_label') : context.str(d.labelKey),
+                            d == tabs.last ? context.str('main_tabbar_more_label') : context.str(d.labelKey),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

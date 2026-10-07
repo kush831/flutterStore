@@ -1,8 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/app_env.dart';
 import '../../../core/design/adaptive_page.dart';
 import '../../../core/design/app_snack.dart';
 import '../../../core/design/breakpoints.dart';
@@ -110,7 +112,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         ),
       ),
     )
-        : const SizedBox.shrink();
+        : const Positioned(top: 0, left: 0, child: SizedBox.shrink());
 
     Widget list(double width) => RefreshIndicator(
       color: context.primary,
@@ -120,13 +122,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         padding: EdgeInsets.fromLTRB(size.isCompact ? 16 : 0, size.isCompact ? 8 : 0, size.isCompact ? 16 : 0, 96),
         children: [
           if (size.isCompact) ...[
-            if (kDebugMode)
-              Text(
-                'home: ${st.home.runtimeType} | summary: ${st.summary.runtimeType} | texts: ${ref.watch(stringsProvider).strings.length}',
-                style: const TextStyle(fontSize: 12, color: Colors.red),
-              ),
-            _Greeting(greeting: greeting, subtitle: subtitle),
+            GestureDetector(
+              onLongPress: AppEnv.devTools ? () => context.push(Routes.devStrings) : null,
+              child: _Greeting(greeting: greeting, subtitle: subtitle),
+            ),
             const SizedBox(height: 16),
+            if (data != null) ...[_StoreCard(d: data), const SizedBox(height: 12)],
             _StatusCard(isOpen: st.isOpen, updating: st.updating, loading: st.home.isLoading && data == null, onChanged: _toggle),
             const SizedBox(height: 12),
           ],
@@ -212,6 +213,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
 
     if (mode == _Mode.desktop) {
       return [
+        if (data != null) ...[_StoreCard(d: data), gap],
         counts,
         gap,
         Row(
@@ -219,19 +221,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
           children: [
             Expanded(flex: 16, child: Column(children: [sales, gap, summary])),
             const SizedBox(width: 12),
-            Expanded(flex: 10, child: Column(children: [alerts, if (data != null && (data.outOfStock > 0 || data.lowStock > 0)) gap, const _QuickActions(columns: 2)])),
+            Expanded(flex: 10, child: Column(children: [alerts, if (data != null && (data.outOfStock > 0 || data.lowStock > 0)) gap, const _QuickActions()])),
           ],
         ),
       ];
     }
 
     return [
+      if (mode != _Mode.compact && data != null) ...[_StoreCard(d: data), gap],
       counts,
       gap,
       sales,
       if (data != null && (data.outOfStock > 0 || data.lowStock > 0)) ...[gap, alerts],
       gap,
-      _QuickActions(columns: mode == _Mode.compact ? 4 : 4),
+      const _QuickActions(),
       gap,
       summary,
     ];
@@ -312,6 +315,75 @@ class _StatusCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The store header: profile image, name and address. Tapping it opens the store profile.
+class _StoreCard extends StatelessWidget {
+  const _StoreCard({required this.d});
+
+  final DashboardData d;
+
+  @override
+  Widget build(BuildContext context) {
+    final tk = context.tk;
+    final initial = d.storeName.trim().isEmpty ? '·' : d.storeName.trim()[0].toUpperCase();
+    final fallback = Container(
+      width: 56,
+      height: 56,
+      color: context.primary.withValues(alpha: 0.12),
+      alignment: Alignment.center,
+      child: Text(initial, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: context.primary)),
+    );
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push(Routes.storeProfile),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: d.profileImage.isEmpty
+                    ? fallback
+                    : CachedNetworkImage(
+                  imageUrl: d.profileImage,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 170,
+                  placeholder: (_, _) => fallback,
+                  errorWidget: (_, _, _) => fallback,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(d.storeName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: tk.text1)),
+                    if (d.address.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(padding: const EdgeInsets.only(top: 1), child: Icon(Icons.location_on_outlined, size: 15, color: tk.text3)),
+                          const SizedBox(width: 4),
+                          Expanded(child: Text(d.address, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: tk.text2, height: 1.35))),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: tk.text3),
+            ],
+          ),
         ),
       ),
     );
@@ -404,20 +476,11 @@ class _SalesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;
-    Widget col(String label, String value) => Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(fontSize: 12.5, color: tk.text2)),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: AlignmentDirectional.centerStart,
-            child: Text(money(d.currency, value), style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: tk.text1)),
-          ),
-        ],
-      ),
-    );
+    final rows = <(String, String)>[
+      (context.str('main_storedashboard_sales_today_title'), d.salesToday),
+      (context.str('main_storedashboard_sales_week_title'), d.salesWeek),
+      (context.str('main_storedashboard_sales_month_title'), d.salesMonth),
+    ];
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -425,12 +488,41 @@ class _SalesCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(context.str('main_storedashboard_sales_summary_title'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: tk.text1)),
-            const SizedBox(height: 14),
-            Row(children: [
-              col(context.str('main_storedashboard_sales_today_title'), d.salesToday),
-              col(context.str('main_storedashboard_sales_week_title'), d.salesWeek),
-              col(context.str('main_storedashboard_sales_month_title'), d.salesMonth),
-            ]),
+            const SizedBox(height: 12),
+            Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                border: Border.all(color: tk.border),
+                borderRadius: BorderRadius.circular(Radii.md),
+              ),
+              child: Table(
+                columnWidths: const {0: FlexColumnWidth(1), 1: FlexColumnWidth(1.3)},
+                border: TableBorder.symmetric(inside: BorderSide(color: tk.border)),
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                children: [
+                  for (final (label, value) in rows)
+                    TableRow(
+                      children: [
+                        Container(
+                          color: tk.sunken,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                          child: Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: tk.text2)),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                          child: Text(
+                            money(d.currency, value),
+                            textAlign: TextAlign.end,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: tk.text1),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -484,9 +576,7 @@ class _AlertTile extends StatelessWidget {
 }
 
 class _QuickActions extends StatelessWidget {
-  const _QuickActions({required this.columns});
-
-  final int columns;
+  const _QuickActions();
 
   @override
   Widget build(BuildContext context) {
@@ -505,44 +595,35 @@ class _QuickActions extends StatelessWidget {
           children: [
             Text(context.str('main_storedashboard_quick_actions_title'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: tk.text1)),
             const SizedBox(height: 12),
-            LayoutBuilder(
-              builder: (context, box) {
-                const gap = 10.0;
-                final w = (box.maxWidth - gap * (columns - 1)) / columns;
-                return Wrap(
-                  spacing: gap,
-                  runSpacing: gap,
-                  children: [
-                    for (final (icon, key, onTap) in items)
-                      SizedBox(
-                        width: w,
-                        child: Material(
-                          color: tk.sunken,
-                          borderRadius: BorderRadius.circular(Radii.md),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(Radii.md),
-                            onTap: onTap,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(color: context.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                                    child: Icon(icon, size: 20, color: context.primary),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(context.str(key), maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: tk.text1, height: 1.2)),
-                                ],
+            _TileGrid(
+              children: [
+                for (final (icon, key, onTap) in items)
+                  Material(
+                    color: tk.sunken,
+                    borderRadius: BorderRadius.circular(Radii.md),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(Radii.md),
+                      onTap: onTap,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            _IconBox(icon),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                context.str(key),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tk.text1, height: 1.2),
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
-                  ],
-                );
-              },
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
@@ -560,33 +641,44 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;
-    final rows = <(String, String)>[
-      ('main_storedashboard_products_count_title', s.products.isEmpty ? '—' : s.products),
-      ('main_storedashboard_totalOrders', s.orders.isEmpty ? '—' : s.orders),
-      ('main_storedashboard_order_amount_title', money(currency, s.orderAmount)),
-      ('main_storedashboard_merchant_earnings_title', money(currency, s.merchantEarning)),
-      ('main_storedashboard_store_earnings_title', money(currency, s.storeEarning)),
+    final rows = <(IconData, String, String)>[
+      (Icons.inventory_2_rounded, 'main_storedashboard_products_count_title', s.products.isEmpty ? '—' : s.products),
+      (Icons.receipt_long_rounded, 'main_storedashboard_totalOrders', s.orders.isEmpty ? '—' : s.orders),
+      (Icons.payments_rounded, 'main_storedashboard_order_amount_title', money(currency, s.orderAmount)),
+      (Icons.account_balance_wallet_rounded, 'main_storedashboard_merchant_earnings_title', money(currency, s.merchantEarning)),
+      (Icons.storefront_rounded, 'main_storedashboard_store_earnings_title', money(currency, s.storeEarning)),
     ];
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(context.str('main_storedashboard_business_summary_title'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: tk.text1)),
-            const SizedBox(height: 6),
-            for (var i = 0; i < rows.length; i++) ...[
-              if (i > 0) Divider(color: tk.border),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(context.str(rows[i].$1), style: TextStyle(color: tk.text2))),
-                    Text(rows[i].$2, style: TextStyle(fontWeight: FontWeight.w700, color: tk.text1)),
-                  ],
-                ),
-              ),
-            ],
+            const SizedBox(height: 12),
+            _TileGrid(
+              children: [
+                for (final (icon, key, value) in rows)
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: tk.sunken, borderRadius: BorderRadius.circular(Radii.md)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _IconBox(icon),
+                        const SizedBox(height: 10),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: tk.text1, letterSpacing: -0.3)),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(context.str(key), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: tk.text2)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -618,4 +710,42 @@ class _ErrorCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 2 tiles per row. With an odd count, the last tile takes the full width.
+class _TileGrid extends StatelessWidget {
+  const _TileGrid({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      const gap = 10.0;
+      final half = (box.maxWidth - gap) / 2;
+      final odd = children.length.isOdd;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (var i = 0; i < children.length; i++)
+            SizedBox(width: (odd && i == children.length - 1) ? box.maxWidth : half, child: children[i]),
+        ],
+      );
+    },
+  );
+}
+
+class _IconBox extends StatelessWidget {
+  const _IconBox(this.icon);
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 36,
+    height: 36,
+    decoration: BoxDecoration(color: context.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+    child: Icon(icon, size: 20, color: context.primary),
+  );
 }

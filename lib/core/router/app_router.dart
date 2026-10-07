@@ -19,6 +19,8 @@ import '../../features/cms/ui/cms_page_screen.dart';
 import '../../features/dev/api_smoke_page.dart';
 import '../../features/dev/strings_dev_page.dart';
 import '../../features/home/ui/home_screen.dart';
+import '../../features/orders/ui/order_detail_screen.dart';
+import '../../features/orders/ui/orders_screen.dart';
 import '../../features/splash/ui/splash_screen.dart';
 import '../../features/splash/ui/welcome_screen.dart';
 import '../auth/auth_controller.dart';
@@ -110,10 +112,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: Routes.home,
             pageBuilder: (_, s) => NoTransitionPage(key: s.pageKey, child: const HomeScreen()),
           ),
-          tab(Routes.orders, 'Orders'),
+          GoRoute(
+            path: Routes.orders,
+            pageBuilder: (_, s) => NoTransitionPage(
+              key: s.pageKey,
+              child: OrdersScreen(tabParam: s.uri.queryParameters['tab']),
+            ),
+          ),
           GoRoute(
             path: '${Routes.orders}/:id',
-            builder: (_, s) => PlaceholderScreen(title: 'Order #${s.pathParameters['id']}', fallbackRoute: Routes.orders),
+            builder: (_, s) => OrderDetailScreen(id: s.pathParameters['id'] ?? ''),
           ),
           tab(Routes.products, 'Products'),
           page(Routes.productAdd, 'Add product', back: Routes.products), // before ':id'
