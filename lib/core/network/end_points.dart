@@ -33,7 +33,33 @@ abstract final class EndPoints {
   static const productStep1 = 'api/business-segment/get-product-step1';
   static const saveProductStep1 = 'api/business-segment/save-product-step1';
   static const subCategories = 'api/business-segment/get-sub-categories';
+  static const productStep2 = 'api/business-segment/get-product-step2';
+  static const saveProductStep2 = 'api/business-segment/save-product-step2';
+  static const productStep3 = 'api/business-segment/get-product-step3';
+  static const saveProductStep3 = 'api/business-segment/save-product-step3';
+  static const productDetails = 'api/business-segment/get-product-details';
+  static const productOptions = 'api/business-segment/get-product-options';
+  static const saveOptions = 'api/business-segment/save-options';
 
+  static const getOptions = 'api/business-segment/get-options';
+  static const optionTypes = 'api/business-segment/get-options-types';
+  static const saveOption = 'api/business-segment/add-option'; // also updates, when an `id` is sent
+  static const deleteOption = 'api/business-segment/delete-option';
+
+  static const merchantDetails = 'api/business-segment/get-merchant-details';
+  static const editProfile = 'api/business-segment/edit-profile';
+
+  static const timeSlabs = 'api/business-segment/product-availability-time-slabs';
+  static const saveSlab = 'api/business-segment/product-availability-time-slabs/save';
+  static const deleteSlab = 'api/business-segment/product-availability-time-slabs/delete';
+  static const earnings = 'api/business-segment/get-earnings';
+  static const walletTransactions = 'api/business-segment/get-wallet-transactions';
+  static const cashoutTransactions = 'api/business-segment/get-cashout-transactions';
+  static const requestCashout = 'api/business-segment/request-cashout';
+  static const logout = 'api/business-segment/out-board';
+  static const deleteAccount = 'api/business-segment/delete-account';
+  static const membershipPlans = 'api/business-segment/membership-plan';
+  static const buyMembership = 'api/business-segment/purchase-membership-plan';
   /// Requests that are sent with publicKey / secretKey even when a token exists (Jetpack rule).
   static const publicKeyEndpoints = [appStrings,previewLogin];
 }

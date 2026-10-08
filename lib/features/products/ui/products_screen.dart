@@ -178,7 +178,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> with WidgetsBin
             type: _type,
             isFood: isFood,
             currency: currency,
-            onOpen: () => context.push(Routes.productEdit(items[i].id)),
+            onOpen: () => context.push(Routes.productDetail(items[i].id)),
             onVariants: () => _openVariants(items[i], currency),
             onToggle: (on) => _toggleProduct(items[i], on),
           ),

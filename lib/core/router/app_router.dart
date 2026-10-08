@@ -1,3 +1,4 @@
+import 'package:apporio_store_30sept/features/more/ui/more_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/demo_pages.dart' show DesignShowcasePage;
 import '../../app/dev_hub_page.dart';
 import '../../app/placeholder_screen.dart';
-import '../../app/splash_placeholder.dart';
+import '../../features/analytics/ui/analytics_screen.dart';
 import '../../features/auth/logic/login_screen.dart';
 import '../../features/auth/logic/signup_screen.dart';
 import '../../features/auth/ui/demo_login_screen.dart';
@@ -15,16 +16,29 @@ import '../../features/auth/ui/reset_password_screen.dart';
 import '../../features/auth/ui/stripe_documents_screen.dart';
 import '../../features/auth/ui/upload_documents_screen.dart';
 import '../../features/auth/ui/verify_otp_screen.dart';
+import '../../features/catalog/ui/categories_screen.dart';
+import '../../features/catalog/ui/options_screen.dart';
 import '../../features/cms/ui/cms_page_screen.dart';
 import '../../features/dev/api_smoke_page.dart';
 import '../../features/dev/strings_dev_page.dart';
+import '../../features/finance/ui/cashout_screen.dart';
+import '../../features/finance/ui/earnings_screen.dart';
+import '../../features/finance/ui/wallet_screen.dart';
 import '../../features/home/ui/home_screen.dart';
+import '../../features/membership/ui/membership_screen.dart';
 import '../../features/orders/ui/order_detail_screen.dart';
 import '../../features/orders/ui/orders_screen.dart';
+import '../../features/products/ui/product_detail_screen.dart';
 import '../../features/products/ui/product_form_screen.dart';
 import '../../features/products/ui/products_screen.dart';
+import '../../features/push/data/push_event.dart';
+import '../../features/push/logic/order_alarm.dart';
 import '../../features/splash/ui/splash_screen.dart';
 import '../../features/splash/ui/welcome_screen.dart';
+import '../../features/store/ui/slabs_screen.dart';
+import '../../features/store/ui/store_edit_screen.dart';
+import '../../features/store/ui/store_profile_screen.dart';
+import '../../features/store/ui/store_timings_screen.dart';
 import '../auth/auth_controller.dart';
 import '../config/app_env.dart';
 import '../design/adaptive_shell.dart';
@@ -67,6 +81,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     builder: (_, _) => PlaceholderScreen(title: title, standalone: true),
   );
 
+
   return GoRouter(
     initialLocation: Routes.splash,
     refreshListenable: refresh,
@@ -83,6 +98,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       fallbackRoute: Routes.splash,
     ),
     routes: [
+      GoRoute(
+        path: Routes.push,
+        redirect: (context, state) {
+          final e = PushEvent.fromUri(state.uri);
+          if (e.isNewOrder || e.type == PushType.orderExpired) ref.read(orderAlarmProvider).stop(e.orderId);
+          return pushRoute(e) ?? Routes.home;
+        },
+      ),
       // ── before the app: full screen, no shell ──────────────────────────────
       GoRoute(path: Routes.splash, builder: (_, _) => const SplashScreen()),
       GoRoute(path: Routes.welcome, builder: (_, _) => const WelcomeScreen()),
@@ -135,20 +158,19 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: Routes.productAdd, builder: (_, _) => const ProductFormScreen()),
           GoRoute(path: '${Routes.products}/:id/edit', builder: (_, s) => ProductFormScreen(productId: s.pathParameters['id'])),
           GoRoute(path: Routes.manageStock, builder: (_, _) => const ProductsScreen(typeParam: 'OUTOFSTOCK')), // before ':id'
-          GoRoute(
-            path: '${Routes.products}/:id',
-            builder: (_, s) => PlaceholderScreen(title: 'Product ${s.pathParameters['id']}', fallbackRoute: Routes.products),
-          ),
-          tab(Routes.more, 'Settings'),
-          page(Routes.analytics, 'Analytics'),
-          page(Routes.earnings, 'Earnings'),
-          page(Routes.wallet, 'Wallet'),
-          page(Routes.cashout, 'Cashout'),
-          page(Routes.categories, 'Categories'),
-          page(Routes.options, 'Options'),
-          page(Routes.storeProfile, 'Store profile'),
-          page(Routes.timings, 'Store timings'),
-          page(Routes.membership, 'Membership'),
+          GoRoute(path: '${Routes.products}/:id', builder: (_, s) => ProductDetailScreen(id: s.pathParameters['id'] ?? '')),
+          GoRoute(path: Routes.categories, builder: (_, _) => const CategoriesScreen()),
+          GoRoute(path: Routes.options, builder: (_, _) => const OptionsScreen()),
+          GoRoute(path: Routes.more, builder: (_, _) => const MoreScreen()),
+          GoRoute(path: Routes.analytics, builder: (_, _) => const AnalyticsScreen()),
+          GoRoute(path: Routes.earnings, builder: (_, _) => const EarningsScreen()),
+          GoRoute(path: Routes.wallet, builder: (_, _) => const WalletScreen()),
+          GoRoute(path: Routes.cashout, builder: (_, _) => const CashoutScreen()),
+          GoRoute(path: Routes.storeProfile, builder: (_, _) => const StoreProfileScreen()),
+          GoRoute(path: Routes.timeSlabs, builder: (_, _) => const SlabsScreen()),
+          GoRoute(path: Routes.storeProfileEdit, builder: (_, _) => const StoreEditScreen()),
+          GoRoute(path: Routes.timings, builder: (_, _) => const StoreTimingsScreen()),
+          GoRoute(path: Routes.membership, builder: (_, _) => const MembershipScreen()),
         ],
       ),
     ],

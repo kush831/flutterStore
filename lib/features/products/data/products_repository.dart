@@ -1,12 +1,17 @@
+import 'package:apporio_store_30sept/features/products/data/product_detail_models.dart';
 import 'package:apporio_store_30sept/features/products/data/product_form_models.dart';
+import 'package:apporio_store_30sept/features/products/data/variant_models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/network/app_exception.dart';
 import '../../../core/network/end_points.dart';
 import '../../../core/network/paging.dart';
 import '../../../core/storage/app_prefs.dart';
 import '../../../core/storage/storage_providers.dart';
+import '../logic/option_logic.dart';
 import '../logic/product_form_state.dart';
+import '../logic/variant_logic.dart';
 import 'product_models.dart';
 
 /// What the list shows. `searchText` is the typed search, or the chosen category's name (Jetpack's rule).
@@ -105,6 +110,56 @@ class ProductsRepository {
       onProgress: onProgress == null ? null : (sent, total) => total > 0 ? onProgress(sent / total) : null,
     );
     return (id: root.sub('data').text('id'), message: root.text('message'));
+  }
+
+  Future<VariantsData> variantsData(String productId) async {
+    final root = await _api.postForm(EndPoints.productStep2, {'product_id': productId, 'locale': _locale});
+    return VariantsData.fromJson(root);
+  }
+
+  /// One call per variant. `variantId` is '' for a new one. Returns the server's message.
+  Future<String> saveVariant(String productId, String variantId, VariantForm f) async {
+    final root = await _api.postJson(EndPoints.saveProductStep2, variantBody(productId: productId, variantId: variantId, f: f, locale: _locale));
+    return root.text('message');
+  }
+
+  Future<StockData> stockData(String productId) async {
+    final root = await _api.postForm(EndPoints.productStep3, {'product_id': productId, 'locale': _locale});
+    return StockData.fromJson(root);
+  }
+
+  /// `newStock` is the new TOTAL (current + the change).
+  Future<String> saveStock({required String variantId, required int newStock, required String cost, required String selling}) async {
+    final root = await _api.postJson(EndPoints.saveProductStep3, {
+      'new_stock': '$newStock',
+      'product_cost': cost.trim(),
+      'product_selling_price': selling.trim(),
+      'product_variant_id': variantId,
+      'locale': _locale,
+    });
+    return root.text('message');
+  }
+
+  Future<ProductDetail> detail(String productId) async {
+    final root = await _api.postForm(EndPoints.productDetails, {'product_id': productId, 'locale': _locale});
+    final d = ProductDetail.fromJson(root);
+    if (d.id.isEmpty) throw const AppException('', kind: ErrorKind.server, detail: 'product detail without details');
+    return d;
+  }
+
+  Future<List<OptionGroup>> mappingOptions(String productId) async {
+    final root = await _api.postForm(EndPoints.productOptions, {'product_id': productId, 'locale': _locale});
+    return [for (final g in root.sub('data').list('responseData', OptionGroup.fromJson)) if (g.options.isNotEmpty) g];
+  }
+
+  /// `all` is every option of every group (with its ticked state). Returns the server's message.
+  Future<String> saveMappedOptions(String productId, List<MappedOption> all) async {
+    final root = await _api.postJson(EndPoints.saveOptions, {
+      'product_id': productId,
+      'arr_option': optionsPayload(all), // JSON TEXT inside the JSON body
+      'locale': _locale,
+    });
+    return root.text('message');
   }
 }
 

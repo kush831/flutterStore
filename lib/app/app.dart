@@ -3,13 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/auth/auth_controller.dart';
 import '../core/config/app_env.dart';
 import '../core/design/design_theme.dart';
 import '../core/design/theme_controller.dart';
 import '../core/router/app_router.dart';
+import '../core/storage/storage_providers.dart';
 import '../core/strings/app_language.dart';
 import '../core/strings/strings_controller.dart';
 import '../core/strings/strings_scope.dart';
+import '../features/push/logic/push_service.dart';
+import '../features/push/ui/push_banner_host.dart';
 
 /// Mouse and trackpad can drag-scroll (browsers, iPad with a trackpad).
 class AppScrollBehavior extends MaterialScrollBehavior {
@@ -34,6 +38,13 @@ class App extends ConsumerWidget {
     final locale = ref.watch(localeProvider);
     final strings = ref.watch(stringsProvider);
 
+    ref.read(pushServiceProvider).init(); // idempotent
+    ref.listen<bool>(authControllerProvider.select((s) => s.loggedIn), (_, loggedIn) {
+      final push = ref.read(pushServiceProvider);
+      loggedIn ? push.onSignedIn(ref.read(appPrefsProvider).businessSegmentId) : push.onSignedOut();
+    });
+
+
     return MaterialApp.router(
       title: AppEnv.appName,
       debugShowCheckedModeBanner: false,
@@ -50,7 +61,10 @@ class App extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       // Above the Navigator: pages, dialogs, sheets and snackbars all see the strings.
-      builder: (context, child) => StringsScope(strings: strings, child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => StringsScope(
+        strings: strings,
+        child: PushBannerHost(child: child ?? const SizedBox.shrink()),
+      ),
     );
   }
 }

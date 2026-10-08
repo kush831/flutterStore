@@ -1,3 +1,5 @@
+import 'package:apporio_store_30sept/features/products/ui/stock_tab.dart';
+import 'package:apporio_store_30sept/features/products/ui/variants_tab.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -220,7 +222,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
     final Widget content;
     if (ready) {
-      content = _tab == 0 ? _basicInfo(data, isFood, compact) : _Soon(titleKey: _tab == 1 ? 'products_productdetail_variants_title' : 'products_stockmanagement_update_title');
+      content = switch (_tab) {
+        0 => _basicInfo(data, isFood, compact),
+        1 => VariantsTab(productId: _id),
+        _ => StockTab(
+          productId: _id,
+          tracksInventory: data.product?.manageInventory == 1,
+          onOpenDetails: () => setState(() => _tab = 0),
+        ),
+      };
     } else if (async.hasError && data == null) {
       content = _ErrorCard(message: errorText(async.error!, ref.read(stringsProvider)), onRetry: () => ref.invalidate(productFormDataProvider(_id)));
     } else {
@@ -268,10 +278,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               tabs,
               progress,
               body,
-              Container(
-                decoration: BoxDecoration(color: tk.surface, border: Border(top: BorderSide(color: tk.border))),
-                child: SafeArea(top: false, child: Padding(padding: const EdgeInsets.fromLTRB(16, 10, 16, 10), child: SizedBox(width: double.infinity, child: saveButton))),
-              ),
+              if (_tab == 0)
+                Container(
+                  decoration: BoxDecoration(color: tk.surface, border: Border(top: BorderSide(color: tk.border))),
+                  child: SafeArea(top: false, child: Padding(padding: const EdgeInsets.fromLTRB(16, 10, 16, 10), child: SizedBox(width: double.infinity, child: saveButton))),
+                ),
             ],
           ),
         ),
@@ -281,7 +292,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     return AdaptivePage(
       title: title,
       fallbackRoute: Routes.products,
-      actions: [saveButton],
+      actions: [if (_tab == 0) saveButton],
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [tabs, progress, body]),
     );
   }
@@ -291,7 +302,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Widget _basicInfo(ProductFormData d, bool isFood, bool compact) {
     final tk = context.tk;
     final f = _form;
-    String err(ProductField k) => _errors[k] == null ? '' : context.str(_errors[k]!);
     String? errOrNull(ProductField k) => _errors[k] == null ? null : context.str(_errors[k]!);
 
     String optionName(List<FormOption> list, int key) {
@@ -793,22 +803,6 @@ class _ImageSlot extends StatelessWidget {
   }
 }
 
-/// The Variants and Stock tabs arrive in 16B.
-class _Soon extends StatelessWidget {
-  const _Soon({required this.titleKey});
-
-  final String titleKey;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 60),
-    child: Column(children: [
-      Icon(Icons.construction_rounded, size: 48, color: context.tk.text3),
-      const SizedBox(height: 12),
-      Text(context.str(titleKey), style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.tk.text1)),
-    ]),
-  );
-}
 
 class _ErrorCard extends StatelessWidget {
   const _ErrorCard({required this.message, required this.onRetry});

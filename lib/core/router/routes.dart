@@ -39,6 +39,10 @@ abstract final class Routes {
   /// /products?type=OUTOFSTOCK | LOWSTOCK
   static String productsFiltered(String type) => '$products?type=$type';
   static String productEdit(String id) => '$products/$id/edit';
+  static const storeProfileEdit = '$storeProfile/edit';
+  static const timeSlabs = '$storeProfile/time-slabs';
+  static const push = '/push'; // the deep link a native notification opens
+
   // ── developer tools (debug + Preview flavor only) ─────────────────────────
   static const devHub = '/dev';
   static const devApi = '/dev/api';
