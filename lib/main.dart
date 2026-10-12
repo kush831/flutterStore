@@ -7,6 +7,8 @@ import 'core/config/app_env.dart';
 import 'core/storage/session_store.dart';
 import 'core/storage/storage_providers.dart';
 import 'features/home/logic/shell_bindings.dart';
+import 'features/pos/data/pos_staff_store.dart';
+import 'features/pos/logic/pos_auth.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,12 +17,16 @@ Future<void> main() async {
   // Loaded before the first frame, so the network layer never waits on disk.
   final prefs = await SharedPreferences.getInstance();
   final session = await SessionStore.load();
+  final posSession = await SessionStore.load(prefix: 'pos_', keysFallback: session);
+  final posStaff = await PosStaffStore.load();
 
   runApp(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         sessionStoreProvider.overrideWithValue(session),
+        posSessionProvider.overrideWithValue(posSession),
+        posStaffStoreProvider.overrideWithValue(posStaff),
         // ...shellOverrides
       ],
       child: const App(),

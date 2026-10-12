@@ -1,3 +1,4 @@
+import 'package:apporio_store_30sept/features/store/ui/styles_card.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import '../../../core/strings/strings_controller.dart';
 import '../../../core/strings/strings_scope.dart';
 import '../../home/logic/dashboard_controller.dart';
 import '../../home/ui/home_format.dart';
+import '../../splash/logic/config_controller.dart';
 import '../data/store_models.dart';
 import '../logic/store_providers.dart';
 
@@ -33,10 +35,11 @@ class StoreProfileScreen extends ConsumerWidget {
     final async = ref.watch(storeProfileProvider);
     final p = async.value;
     final isOpen = ref.watch(dashboardProvider.select((s) => s.isOpen));
+    final packagingOn = ref.watch(appConfigProvider)?.packagingModule ?? false;
 
     final Widget body;
     if (p != null) {
-      body = _Body(p: p, isOpen: isOpen ?? false, wide: wide);
+      body = _Body(p: p, isOpen: isOpen ?? false, wide: wide,packagingOn: packagingOn);
     } else if (async.hasError) {
       body = Card(
         margin: EdgeInsets.zero,
@@ -83,11 +86,12 @@ class StoreProfileScreen extends ConsumerWidget {
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.p, required this.isOpen, required this.wide});
+  const _Body({required this.p, required this.isOpen, required this.wide,required this.packagingOn});
 
   final StoreProfile p;
   final bool isOpen;
   final bool wide;
+  final bool packagingOn;
 
   @override
   Widget build(BuildContext context) {
@@ -185,8 +189,21 @@ class _Body extends StatelessWidget {
     )
         : null;
 
-    final left = <Widget>[header, contact, address];
-    final right = <Widget>[delivery, ?support, timings, ?slabs];
+    final packaging = (p.packagingEnabled && packagingOn)
+        ? Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        leading: Container(width: 38, height: 38, decoration: BoxDecoration(color: context.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)), child: Icon(Icons.inventory_2_outlined, size: 20, color: context.primary)),
+        title: Text(context.str('settings_settings_section_packagingPreferences'), style: TextStyle(fontWeight: FontWeight.w700, color: tk.text1)),
+        trailing: Icon(Icons.chevron_right_rounded, color: tk.text3),
+        onTap: () => context.push(Routes.packaging),
+      ),
+    )
+        : null;
+
+    final left = <Widget>[header, contact, address,const StylesCard()];
+    final right = <Widget>[delivery, ?support, timings, ?slabs, ?packaging];
 
     Widget column(List<Widget> items) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (var i = 0; i < items.length; i++) ...[if (i > 0) gap, items[i]]]);
 

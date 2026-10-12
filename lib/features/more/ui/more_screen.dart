@@ -147,6 +147,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final home = ref.watch(dashboardProvider.select((s) => s.home.value));
     final isFood = ref.watch(appPrefsProvider).isFood;
+    final packaging = ref.watch(storeProfileProvider.select((a) => a.value?.packagingEnabled ?? false)) && (ref.watch(appConfigProvider)?.packagingModule ?? false);
     final availability = ref.watch(storeProfileProvider.select((a) => a.value?.availabilityEnabled ?? false));
     final langCode = ref.watch(stringsProvider.select((s) => s.code));
     final languages = ref.watch(appConfigProvider)?.languages ?? const [];
@@ -193,6 +194,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
       _tile(context, icon: Icons.category_outlined, titleKey: 'settings_settings_row_categories_title', subtitleKey: 'settings_settings_row_categories_message', onTap: () => context.push(Routes.categories)),
       if (isFood) _tile(context, icon: Icons.tune_rounded, titleKey: 'settings_settings_row_options', subtitleKey: 'settings_settings_row_optionsDesc', onTap: () => context.push(Routes.options)),
       if (availability) _tile(context, icon: Icons.event_available_rounded, titleKey: 'storedetails_storeprofile_screen_productAvailability', subtitleKey: 'storedetails_storeprofile_screen_setTimeSlabsForAvailability', onTap: () => context.push(Routes.timeSlabs)),
+      if (packaging) _tile(context, icon: Icons.inventory_2_outlined, titleKey: 'settings_settings_section_packagingPreferences', onTap: () => context.push(Routes.packaging)),
     ]);
 
     final financial = _group(context, 'settings_settings_section_financial_customer', [

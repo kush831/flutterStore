@@ -17,7 +17,9 @@ String startupRoute({
   required int signupStatus,
   required bool membershipEnabled,
   required bool previewGate, // Preview flavor and the PIN was not entered yet
+  bool posLoggedIn = false,
 }) {
+  if (posLoggedIn) return Routes.posStart;
   if (!loggedIn) return previewGate ? Routes.login : Routes.welcome;
   return switch (signupStatus) {
     3 => Routes.stripeDocuments,
@@ -44,6 +46,7 @@ String? appRedirect({
   required AuthState auth,
   required bool devEnabled,
   bool membershipEnabled = false,
+  bool posLoggedIn = false,
 }) {
   // developer pages: closed in production
   if (location.startsWith('/dev')) {
@@ -57,6 +60,12 @@ String? appRedirect({
   if ((location == Routes.previewLogin || location == Routes.demoLogin) && !devEnabled) {
     return auth.loggedIn ? Routes.home : Routes.welcome;
   }
+  final inPos = location == Routes.pos || location.startsWith('${Routes.pos}/');
+  if (inPos) {
+    if (location == Routes.posLogin) return posLoggedIn ? Routes.posStart : null;
+    return posLoggedIn ? null : Routes.posLogin;
+  }
+
   // ── signed out ─────────────────────────────────────────────────────────────
   if (!auth.loggedIn) {
     if (_authEntry.contains(location)) return null;

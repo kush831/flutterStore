@@ -28,6 +28,43 @@ import '../../features/home/ui/home_screen.dart';
 import '../../features/membership/ui/membership_screen.dart';
 import '../../features/orders/ui/order_detail_screen.dart';
 import '../../features/orders/ui/orders_screen.dart';
+import '../../features/packaging/ui/packaging_screen.dart';
+import '../../features/pos/data/pos_catalog_models.dart';
+import '../../features/pos/data/pos_shift_models.dart';
+import '../../features/pos/logic/pos_auth.dart';
+import '../../features/pos/logic/pos_sale.dart';
+import '../../features/pos/ui/pos_all_sessions_screen.dart';
+import '../../features/pos/ui/pos_analytics_screen.dart';
+import '../../features/pos/ui/pos_barcode_scanner_screen.dart';
+import '../../features/pos/ui/pos_cart_screen.dart';
+import '../../features/pos/ui/pos_close_session_screen.dart';
+import '../../features/pos/ui/pos_dashboard_screen.dart';
+import '../../features/pos/ui/pos_handover_screen.dart';
+import '../../features/pos/ui/pos_held_carts_screen.dart';
+import '../../features/pos/ui/pos_login_screen.dart';
+import '../../features/pos/ui/pos_more_screen.dart';
+import '../../features/pos/ui/pos_open_session_screen.dart';
+import '../../features/pos/ui/pos_order_detail_screen.dart';
+import '../../features/pos/ui/pos_order_queue_screen.dart';
+import '../../features/pos/ui/pos_order_success_screen.dart';
+import '../../features/pos/ui/pos_orders_screen.dart';
+import '../../features/pos/ui/pos_payment_screen.dart';
+import '../../features/pos/ui/pos_placeholder.dart';
+import '../../features/pos/ui/pos_product_detail_screen.dart';
+import '../../features/pos/ui/pos_products_screens.dart';
+import '../../features/pos/ui/pos_receipt_screen.dart';
+import '../../features/pos/ui/pos_roles_screen.dart';
+import '../../features/pos/ui/pos_search_screen.dart';
+import '../../features/pos/ui/pos_session_closed_screen.dart';
+import '../../features/pos/ui/pos_session_screen.dart';
+import '../../features/pos/ui/pos_shell.dart';
+import '../../features/pos/ui/pos_shift_history_screen.dart';
+import '../../features/pos/ui/pos_staff_detail_screen.dart';
+import '../../features/pos/ui/pos_staff_screen.dart';
+import '../../features/pos/ui/pos_start_screen.dart';
+import '../../features/pos/ui/pos_store_profile_screen.dart';
+import '../../features/pos/ui/pos_terminals_screen.dart';
+import '../../features/pos/ui/pos_transfer_screen.dart';
 import '../../features/products/ui/product_detail_screen.dart';
 import '../../features/products/ui/product_form_screen.dart';
 import '../../features/products/ui/products_screen.dart';
@@ -50,13 +87,18 @@ import 'routes.dart';
 class _AuthRefresh extends ChangeNotifier {
   _AuthRefresh(Ref ref) {
     _sub = ref.listen<AuthState>(authControllerProvider, (_, _) => notifyListeners());
+    _posSub = ref.listen<PosAuthState>(posAuthProvider, (_, _) => notifyListeners());
+
   }
 
   late final ProviderSubscription<AuthState> _sub;
+  late final ProviderSubscription<PosAuthState> _posSub;
+
 
   @override
   void dispose() {
     _sub.close();
+    _posSub.close();
     super.dispose();
   }
 }
@@ -91,6 +133,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       auth: ref.read(authControllerProvider),
       devEnabled: AppEnv.devTools,
       membershipEnabled: ref.read(appPrefsProvider).membershipEnabled,
+        posLoggedIn: ref.read(posAuthProvider).loggedIn
     ),
     errorBuilder: (context, state) => const PlaceholderScreen(
       title: 'Page not found',
@@ -131,7 +174,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // ── the app: every private page lives inside the adaptive shell ────────
       ShellRoute(
-        builder: (context, state, child) => AdaptiveShell(location: state.uri.path, child: child),
+        builder: (context, state, child) => state.uri.path.startsWith(Routes.pos) ? child : AdaptiveShell(location: state.uri.path, child: child),
         routes: [
           GoRoute(
             path: Routes.home,
@@ -168,9 +211,66 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: Routes.cashout, builder: (_, _) => const CashoutScreen()),
           GoRoute(path: Routes.storeProfile, builder: (_, _) => const StoreProfileScreen()),
           GoRoute(path: Routes.timeSlabs, builder: (_, _) => const SlabsScreen()),
+          GoRoute(path: Routes.packaging, builder: (_, _) => const PackagingScreen()),
           GoRoute(path: Routes.storeProfileEdit, builder: (_, _) => const StoreEditScreen()),
           GoRoute(path: Routes.timings, builder: (_, _) => const StoreTimingsScreen()),
           GoRoute(path: Routes.membership, builder: (_, _) => const MembershipScreen()),
+
+
+          GoRoute(path: Routes.posLogin, builder: (_, _) => const PosLoginScreen()),
+          GoRoute(path: Routes.posStart, builder: (_, _) => const PosStartScreen()),
+          ShellRoute(
+            builder: (context, state, child) => PosShell(location: state.uri.path, child: child),
+            routes: [
+              GoRoute(path: Routes.pos, pageBuilder: (c, s) => const NoTransitionPage(child: PosDashboardScreen())),
+              GoRoute(path: Routes.posProducts, pageBuilder: (c, s) => const NoTransitionPage(child: PosProductsEntry())),
+              GoRoute(path: Routes.posOrders, pageBuilder: (c, s) => NoTransitionPage(child: PosOrdersScreen(initialTab: s.uri.queryParameters['tab']))),
+              GoRoute(path: Routes.posMore, pageBuilder: (c, s) => const NoTransitionPage(child: PosMoreScreen())),
+            ],
+          ),
+          GoRoute(path: Routes.posStoreProfile, builder: (_, _) => const PosStoreProfileScreen()),
+          GoRoute(path: Routes.posAnalytics, builder: (_, _) => const PosAnalyticsScreen()),
+          GoRoute(path: Routes.posOpenSession, builder: (_, _) => const PosOpenSessionScreen()),
+          GoRoute(path: Routes.posSessions, builder: (_, _) => const PosSessionScreen()),
+          GoRoute(path: Routes.posTerminals, builder: (_, _) => const PosTerminalsScreen()),
+
+          GoRoute(path: Routes.posCloseSession, builder: (_, _) => const PosCloseSessionScreen()),
+          GoRoute(
+            path: Routes.posSessionClosed,
+            redirect: (_, s) => s.extra is PosCloseResult ? null : Routes.posSessions, // the summary is passed in; after a page reload go to Sessions
+            builder: (_, s) => PosSessionClosedScreen(result: s.extra as PosCloseResult),
+          ),
+          GoRoute(path: Routes.posHandover, builder: (_, _) => const PosHandoverScreen()),
+          GoRoute(path: Routes.posTransfer, builder: (_, _) => const PosTransferScreen()),
+          GoRoute(path: Routes.posShiftHistory, builder: (_, _) => const PosShiftHistoryScreen()),
+          GoRoute(path: Routes.posAllSessions, builder: (_, _) => const PosAllSessionsScreen()),
+          GoRoute(path: Routes.posCategories, builder: (_, _) => const PosCategoriesScreen()),
+          GoRoute(
+            path: '${Routes.posCategory}/:id',
+            builder: (_, s) => PosCategoryProductsScreen(categoryId: s.pathParameters['id'] ?? '', name: s.uri.queryParameters['name'] ?? '', hasSub: s.uri.queryParameters['sub'] == '1'),
+          ),
+          GoRoute(path: Routes.posCart, builder: (_, _) => const PosCartScreen()),
+          GoRoute(path: Routes.posHeldCarts, builder: (_, _) => const PosHeldCartsScreen()),
+          GoRoute(path: Routes.posSearch, builder: (_, _) => const PosSearchScreen()),
+          GoRoute(path: Routes.posScan, builder: (_, _) => const PosBarcodeScannerScreen()),
+          GoRoute(
+            path: '${Routes.posProduct}/:id',
+            builder: (_, s) => PosProductDetailScreen(productId: s.pathParameters['id'] ?? '', product: s.extra is PosProduct ? s.extra as PosProduct : null),
+          ),
+          GoRoute(path: Routes.posPayment, builder: (_, _) => const PosPaymentScreen()),
+          GoRoute(path: Routes.posOrderQueue, builder: (_, _) => const PosOrderQueueScreen()),
+          GoRoute(path: '${Routes.posOrder}/:id', builder: (_, s) => PosOrderDetailScreen(orderId: s.pathParameters['id'] ?? '')),
+          GoRoute(
+            path: Routes.posOrderSuccess,
+            redirect: (_, _) => ref.read(posLastSaleProvider) == null ? Routes.posProducts : null, // nothing was just sold (a page reload)
+            builder: (_, _) => const PosOrderSuccessScreen(),
+          ),
+          GoRoute(path: '${Routes.posReceipt}/:id', builder: (_, s) => PosReceiptScreen(orderId: s.pathParameters['id'] ?? '')),
+          GoRoute(path: Routes.posStaff, builder: (_, _) => const PosStaffScreen()),
+          GoRoute(path: Routes.posAllStaff, builder: (_, _) => const PosAllStaffScreen()),
+          GoRoute(path: '${Routes.posStaffMember}/:id', builder: (_, s) => PosStaffDetailScreen(staffId: s.pathParameters['id'] ?? '')),
+          GoRoute(path: '${Routes.posStatusHistory}/:id', builder: (_, s) => PosStatusHistoryScreen(staffId: s.pathParameters['id'] ?? '', name: s.uri.queryParameters['name'] ?? '')),
+          GoRoute(path: Routes.posRoles, builder: (_, _) => const PosRolesScreen()),
         ],
       ),
     ],

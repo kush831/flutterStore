@@ -60,6 +60,60 @@ abstract final class EndPoints {
   static const deleteAccount = 'api/business-segment/delete-account';
   static const membershipPlans = 'api/business-segment/membership-plan';
   static const buyMembership = 'api/business-segment/purchase-membership-plan';
+
+  static const styles = 'api/business-segment/get-styles';
+  static const saveStyles = 'api/business-segment/save-styles';
+  static const packagingPrefs = 'api/business-segment/packaging-preferences';
+  static const savePackaging = 'api/business-segment/packaging-preferences/save';
+  static const deletePackaging = 'api/business-segment/packaging-preferences/delete';
   /// Requests that are sent with publicKey / secretKey even when a token exists (Jetpack rule).
   static const publicKeyEndpoints = [appStrings,previewLogin];
+
+  static const posVerifyPin = 'api/pos/stores/staff/verify-pin';
+  static const posCurrentSession = 'api/pos/stores/sessions/current';
+  static const posLogout = 'api/pos/stores/logout';
+  static const posMerchantDetails = 'api/pos/stores/get-merchant-details';
+  static const posTerminals = 'api/pos/stores/terminals';
+  static const posTerminalUpdate = 'api/pos/stores/terminals/update';
+  static const posTerminalsList = 'api/pos/stores/terminals/list';
+  static const posTerminalDelete = 'api/pos/stores/terminals/delete';
+  static const posOpenSession = 'api/pos/stores/sessions/open';
+  static const posCloseSession = 'api/pos/stores/sessions/close';
+  static const posHandover = 'api/pos/stores/sessions/handover';
+  static const posForceTransfer = 'api/pos/stores/manager/session/force-transfer';
+  static const posSessions = 'api/pos/stores/sessions';
+  static const posManagerSessions = 'api/pos/stores/manager/sessions';
+
+  static const posCategories = 'api/pos/stores/categories';
+  static const posSubCategories = 'api/pos/stores/subcategories';
+  static const posProducts = 'api/pos/stores/products';
+  static const posSearch = 'api/pos/stores/search';
+  static const posProductDetail = 'api/pos/stores/get-product-details';
+  static const posSaveCart = 'api/pos/stores/cart/save';
+  static const posCartDelete = 'api/pos/stores/cart/delete';
+  static const posPromoApply = 'api/pos/stores/cart/apply-remove-promo';
+  static const posPromoCodes = 'api/pos/stores/promo-codes';
+  static const posUsers = 'api/pos/stores/get-users';
+  static const posPlaceOrder = 'api/pos/stores/place-order';
+  static const posOrderDetail = 'api/pos/stores/get-order-detail';
+  static const posOrders = 'api/pos/stores/get-orders';
+  static const posUpdateOrderStatus = 'api/pos/stores/update-order-status';
+  static const posCancelOrder = 'api/pos/stores/cancel-order';
+  static const posStaffSummary = 'api/pos/stores/staff/summary';
+  static const posStaffList = 'api/pos/stores/staff';
+  static const posStaffDetail = 'api/pos/stores/staff/detail';
+  static const posStaffStatusLog = 'api/pos/stores/staff/status-log';
+  static const posStaffCreate = 'api/pos/stores/staff/create';
+  static const posStaffUpdate = 'api/pos/stores/staff/update';
+  static const posStaffChangeRole = 'api/pos/stores/staff/change/role';
+  static const posStaffStatus = 'api/pos/stores/staff/status';
+  static const posStaffDeactivate = 'api/pos/stores/staff/deactivate';
+  static const posRoles = 'api/pos/stores/roles';
+  static const posRoleShow = 'api/pos/stores/roles/show';
+  static const posRoleStore = 'api/pos/stores/roles/store';
+  static const posRoleUpdate = 'api/pos/stores/roles/update';
+  static const posRoleDestroy = 'api/pos/stores/roles/destroy';
+  static const posPermissions = 'api/pos/permissions';
+  static const posReport = 'api/pos/stores/report';
+
 }

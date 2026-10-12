@@ -5,27 +5,28 @@ import '../config/app_env.dart';
 /// Token and API keys, in the platform's secure storage (Keychain / Keystore / WebCrypto).
 /// Values are cached in memory, so the network layer reads them instantly.
 class SessionStore {
-  SessionStore._(this._storage);
+  SessionStore._(this._storage,this._prefix,this._keysFallback);
 
   final FlutterSecureStorage _storage;
+  final String _prefix;
+  final SessionStore? _keysFallback;
 
-  static const _kToken = 'token';
-  static const _kPublic = 'public_key';
-  static const _kSecret = 'secret_key';
+  String get _kToken => '${_prefix}token';
+  String get _kPublic => '${_prefix}public_key';
+  String get _kSecret => '${_prefix}secret_key';
 
   String _token = '';
   String _publicKey = '';
   String _secretKey = '';
 
-  static Future<SessionStore> load() async {
+  static Future<SessionStore> load({String prefix = '',SessionStore? keysFallback}) async {
     const storage = FlutterSecureStorage();
-    final s = SessionStore._(storage);
+    final s = SessionStore._(storage, prefix,keysFallback);
     try {
-      s._token = await storage.read(key: _kToken) ?? '';
-      s._publicKey = await storage.read(key: _kPublic) ?? '';
-      s._secretKey = await storage.read(key: _kSecret) ?? '';
+      s._token = await storage.read(key: s._kToken) ?? '';
+      s._publicKey = await storage.read(key: s._kPublic) ?? '';
+      s._secretKey = await storage.read(key: s._kSecret) ?? '';
     } catch (_) {
-      // Android keystore can become unreadable after a restore / OS update → start logged out, don't crash.
       try {
         await storage.deleteAll();
       } catch (_) {}
@@ -37,8 +38,9 @@ class SessionStore {
   bool get isLoggedIn => _token.isNotEmpty;
 
   /// Merchant keys from the login response, otherwise the flavor's keys from env.
-  String get publicKey => _publicKey.isNotEmpty ? _publicKey : AppEnv.apiKey;
-  String get secretKey => _secretKey.isNotEmpty ? _secretKey : AppEnv.secretKey;
+  ///   /// Merchant keys from the login response, otherwise the fallback session's keys, otherwise the flavor's keys from env.
+    String get publicKey => _publicKey.isNotEmpty ? _publicKey : (_keysFallback?.publicKey ?? AppEnv.apiKey);
+    String get secretKey => _secretKey.isNotEmpty ? _secretKey : (_keysFallback?.secretKey ?? AppEnv.secretKey);
 
   Future<void> saveLogin({required String token, String? publicKey, String? secretKey}) async {
     _token = 'Bearer $token';
@@ -57,7 +59,9 @@ class SessionStore {
     _publicKey = '';
     _secretKey = '';
     try {
-      await _storage.deleteAll();
+      await _storage.delete(key: _kToken);
+      await _storage.delete(key: _kPublic);
+      await _storage.delete(key: _kSecret);
     } catch (_) {}
   }
   /// Preview PIN: this merchant's API keys replace the flavor's keys (until the next PIN).

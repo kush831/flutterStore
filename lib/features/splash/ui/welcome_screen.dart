@@ -9,6 +9,7 @@ import '../../../core/router/routes.dart';
 import '../../../core/storage/storage_providers.dart';
 import '../../../core/strings/strings_controller.dart';
 import '../../../core/strings/strings_scope.dart';
+import '../../pos/ui/login_type_sheet.dart';
 import '../data/app_config.dart';
 import '../logic/config_controller.dart';
 import 'brand_widgets.dart';
@@ -28,7 +29,18 @@ class WelcomeScreen extends ConsumerWidget {
 
 // ── shared pieces ───────────────────────────────────────────────────────────
 
-void _login(BuildContext c) => c.push(Routes.login);
+/// Jetpack: when the server enables POS, "Login" first asks "Store or POS?".
+Future<void> _login(BuildContext c) async {
+  final posOn = ProviderScope.containerOf(c).read(appConfigProvider)?.posEnabled ?? false;
+  if (!posOn) {
+    c.push(Routes.login);
+    return;
+  }
+  final choice = await showLoginTypeSheet(c);
+  if (!c.mounted) return;
+  if (choice == LoginType.pos) c.push(Routes.posLogin);
+  if (choice == LoginType.store) c.push(Routes.login);
+}
 void _signup(BuildContext c) => c.push(Routes.signup);
 
 class _LangChip extends ConsumerWidget {

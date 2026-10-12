@@ -8,6 +8,7 @@ import '../../../core/config/app_env.dart';
 import '../../../core/router/app_redirect.dart';
 import '../../../core/storage/storage_providers.dart';
 import '../../../core/strings/strings_controller.dart';
+import '../../pos/logic/pos_auth.dart';
 import '../data/app_config.dart';
 import 'config_controller.dart';
 
@@ -125,6 +126,7 @@ class SplashController extends Notifier<SplashState> {
         signupStatus: auth.signupStatus,
         membershipEnabled: auth.loggedIn && prefs.membershipEnabled,
         previewGate: AppEnv.previewPinGate && prefs.enteredPin.isEmpty,
+          posLoggedIn: ref.read(posAuthProvider).loggedIn
       ),
     );
   }
