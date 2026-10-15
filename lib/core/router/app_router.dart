@@ -49,7 +49,6 @@ import '../../features/pos/ui/pos_order_queue_screen.dart';
 import '../../features/pos/ui/pos_order_success_screen.dart';
 import '../../features/pos/ui/pos_orders_screen.dart';
 import '../../features/pos/ui/pos_payment_screen.dart';
-import '../../features/pos/ui/pos_placeholder.dart';
 import '../../features/pos/ui/pos_product_detail_screen.dart';
 import '../../features/pos/ui/pos_products_screens.dart';
 import '../../features/pos/ui/pos_receipt_screen.dart';
@@ -88,12 +87,10 @@ class _AuthRefresh extends ChangeNotifier {
   _AuthRefresh(Ref ref) {
     _sub = ref.listen<AuthState>(authControllerProvider, (_, _) => notifyListeners());
     _posSub = ref.listen<PosAuthState>(posAuthProvider, (_, _) => notifyListeners());
-
   }
 
   late final ProviderSubscription<AuthState> _sub;
   late final ProviderSubscription<PosAuthState> _posSub;
-
 
   @override
   void dispose() {
@@ -103,26 +100,12 @@ class _AuthRefresh extends ChangeNotifier {
   }
 }
 
+/// A POS page: "/pos" itself or anything under "/pos/". (Whole segments only.)
+bool _isPosPath(String p) => p == Routes.pos || p.startsWith('${Routes.pos}/');
+
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = _AuthRefresh(ref);
   ref.onDispose(refresh.dispose);
-
-  // The 4 tab pages: no slide animation when switching between them.
-  GoRoute tab(String path, String title) => GoRoute(
-    path: path,
-    pageBuilder: (_, s) => NoTransitionPage(key: s.pageKey, child: PlaceholderScreen(title: title)),
-  );
-
-  GoRoute page(String path, String title, {String? back}) => GoRoute(
-    path: path,
-    builder: (_, _) => PlaceholderScreen(title: title, fallbackRoute: back),
-  );
-
-  GoRoute open(String path, String title) => GoRoute(
-    path: path,
-    builder: (_, _) => PlaceholderScreen(title: title, standalone: true),
-  );
-
 
   return GoRouter(
     initialLocation: Routes.splash,
@@ -133,7 +116,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       auth: ref.read(authControllerProvider),
       devEnabled: AppEnv.devTools,
       membershipEnabled: ref.read(appPrefsProvider).membershipEnabled,
-        posLoggedIn: ref.read(posAuthProvider).loggedIn
+      posLoggedIn: ref.read(posAuthProvider).loggedIn,
     ),
     errorBuilder: (context, state) => const PlaceholderScreen(
       title: 'Page not found',
@@ -173,8 +156,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: Routes.design, builder: (_, _) => const DesignShowcasePage()),
 
       // ── the app: every private page lives inside the adaptive shell ────────
+      // (POS pages are given no store shell: they have their own, PosShell, below)
       ShellRoute(
-        builder: (context, state, child) => state.uri.path.startsWith(Routes.pos) ? child : AdaptiveShell(location: state.uri.path, child: child),
+        builder: (context, state, child) => _isPosPath(state.uri.path) ? child : AdaptiveShell(location: state.uri.path, child: child),
         routes: [
           GoRoute(
             path: Routes.home,
@@ -216,9 +200,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: Routes.timings, builder: (_, _) => const StoreTimingsScreen()),
           GoRoute(path: Routes.membership, builder: (_, _) => const MembershipScreen()),
 
-
+          // ── POS: before the frame (full screen) ────────────────────────────
           GoRoute(path: Routes.posLogin, builder: (_, _) => const PosLoginScreen()),
           GoRoute(path: Routes.posStart, builder: (_, _) => const PosStartScreen()),
+          GoRoute(path: Routes.posOpenSession, builder: (_, _) => const PosOpenSessionScreen()),
+
+          // ── POS: every page inside the POS frame (bottom bar, rail or sidebar) ──
           ShellRoute(
             builder: (context, state, child) => PosShell(location: state.uri.path, child: child),
             routes: [
@@ -226,51 +213,49 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(path: Routes.posProducts, pageBuilder: (c, s) => const NoTransitionPage(child: PosProductsEntry())),
               GoRoute(path: Routes.posOrders, pageBuilder: (c, s) => NoTransitionPage(child: PosOrdersScreen(initialTab: s.uri.queryParameters['tab']))),
               GoRoute(path: Routes.posMore, pageBuilder: (c, s) => const NoTransitionPage(child: PosMoreScreen())),
+              GoRoute(path: Routes.posStoreProfile, builder: (_, _) => const PosStoreProfileScreen()),
+              GoRoute(path: Routes.posAnalytics, builder: (_, _) => const PosAnalyticsScreen()),
+              GoRoute(path: Routes.posSessions, builder: (_, _) => const PosSessionScreen()),
+              GoRoute(path: Routes.posTerminals, builder: (_, _) => const PosTerminalsScreen()),
+              GoRoute(path: Routes.posCloseSession, builder: (_, _) => const PosCloseSessionScreen()),
+              GoRoute(
+                path: Routes.posSessionClosed,
+                redirect: (_, s) => s.extra is PosCloseResult ? null : Routes.posSessions, // the summary is passed in; after a page reload go to Sessions
+                builder: (_, s) => PosSessionClosedScreen(result: s.extra as PosCloseResult),
+              ),
+              GoRoute(path: Routes.posHandover, builder: (_, _) => const PosHandoverScreen()),
+              GoRoute(path: Routes.posTransfer, builder: (_, _) => const PosTransferScreen()),
+              GoRoute(path: Routes.posShiftHistory, builder: (_, _) => const PosShiftHistoryScreen()),
+              GoRoute(path: Routes.posAllSessions, builder: (_, _) => const PosAllSessionsScreen()),
+              GoRoute(path: Routes.posCategories, builder: (_, _) => const PosCategoriesScreen()),
+              GoRoute(
+                path: '${Routes.posCategory}/:id',
+                builder: (_, s) => PosCategoryProductsScreen(categoryId: s.pathParameters['id'] ?? '', name: s.uri.queryParameters['name'] ?? '', hasSub: s.uri.queryParameters['sub'] == '1'),
+              ),
+              GoRoute(path: Routes.posCart, builder: (_, _) => const PosCartScreen()),
+              GoRoute(path: Routes.posHeldCarts, builder: (_, _) => const PosHeldCartsScreen()),
+              GoRoute(path: Routes.posSearch, builder: (_, _) => const PosSearchScreen()),
+              GoRoute(path: Routes.posScan, builder: (_, _) => const PosBarcodeScannerScreen()),
+              GoRoute(
+                path: '${Routes.posProduct}/:id',
+                builder: (_, s) => PosProductDetailScreen(productId: s.pathParameters['id'] ?? '', product: s.extra is PosProduct ? s.extra as PosProduct : null),
+              ),
+              GoRoute(path: Routes.posPayment, builder: (_, _) => const PosPaymentScreen()),
+              GoRoute(path: Routes.posOrderQueue, builder: (_, _) => const PosOrderQueueScreen()),
+              GoRoute(path: '${Routes.posOrder}/:id', builder: (_, s) => PosOrderDetailScreen(orderId: s.pathParameters['id'] ?? '')),
+              GoRoute(
+                path: Routes.posOrderSuccess,
+                redirect: (_, _) => ref.read(posLastSaleProvider) == null ? Routes.posProducts : null, // nothing was just sold (a page reload)
+                builder: (_, _) => const PosOrderSuccessScreen(),
+              ),
+              GoRoute(path: '${Routes.posReceipt}/:id', builder: (_, s) => PosReceiptScreen(orderId: s.pathParameters['id'] ?? '')),
+              GoRoute(path: Routes.posStaff, builder: (_, _) => const PosStaffScreen()),
+              GoRoute(path: Routes.posAllStaff, builder: (_, _) => const PosAllStaffScreen()),
+              GoRoute(path: '${Routes.posStaffMember}/:id', builder: (_, s) => PosStaffDetailScreen(staffId: s.pathParameters['id'] ?? '')),
+              GoRoute(path: '${Routes.posStatusHistory}/:id', builder: (_, s) => PosStatusHistoryScreen(staffId: s.pathParameters['id'] ?? '', name: s.uri.queryParameters['name'] ?? '')),
+              GoRoute(path: Routes.posRoles, builder: (_, _) => const PosRolesScreen()),
             ],
           ),
-          GoRoute(path: Routes.posStoreProfile, builder: (_, _) => const PosStoreProfileScreen()),
-          GoRoute(path: Routes.posAnalytics, builder: (_, _) => const PosAnalyticsScreen()),
-          GoRoute(path: Routes.posOpenSession, builder: (_, _) => const PosOpenSessionScreen()),
-          GoRoute(path: Routes.posSessions, builder: (_, _) => const PosSessionScreen()),
-          GoRoute(path: Routes.posTerminals, builder: (_, _) => const PosTerminalsScreen()),
-
-          GoRoute(path: Routes.posCloseSession, builder: (_, _) => const PosCloseSessionScreen()),
-          GoRoute(
-            path: Routes.posSessionClosed,
-            redirect: (_, s) => s.extra is PosCloseResult ? null : Routes.posSessions, // the summary is passed in; after a page reload go to Sessions
-            builder: (_, s) => PosSessionClosedScreen(result: s.extra as PosCloseResult),
-          ),
-          GoRoute(path: Routes.posHandover, builder: (_, _) => const PosHandoverScreen()),
-          GoRoute(path: Routes.posTransfer, builder: (_, _) => const PosTransferScreen()),
-          GoRoute(path: Routes.posShiftHistory, builder: (_, _) => const PosShiftHistoryScreen()),
-          GoRoute(path: Routes.posAllSessions, builder: (_, _) => const PosAllSessionsScreen()),
-          GoRoute(path: Routes.posCategories, builder: (_, _) => const PosCategoriesScreen()),
-          GoRoute(
-            path: '${Routes.posCategory}/:id',
-            builder: (_, s) => PosCategoryProductsScreen(categoryId: s.pathParameters['id'] ?? '', name: s.uri.queryParameters['name'] ?? '', hasSub: s.uri.queryParameters['sub'] == '1'),
-          ),
-          GoRoute(path: Routes.posCart, builder: (_, _) => const PosCartScreen()),
-          GoRoute(path: Routes.posHeldCarts, builder: (_, _) => const PosHeldCartsScreen()),
-          GoRoute(path: Routes.posSearch, builder: (_, _) => const PosSearchScreen()),
-          GoRoute(path: Routes.posScan, builder: (_, _) => const PosBarcodeScannerScreen()),
-          GoRoute(
-            path: '${Routes.posProduct}/:id',
-            builder: (_, s) => PosProductDetailScreen(productId: s.pathParameters['id'] ?? '', product: s.extra is PosProduct ? s.extra as PosProduct : null),
-          ),
-          GoRoute(path: Routes.posPayment, builder: (_, _) => const PosPaymentScreen()),
-          GoRoute(path: Routes.posOrderQueue, builder: (_, _) => const PosOrderQueueScreen()),
-          GoRoute(path: '${Routes.posOrder}/:id', builder: (_, s) => PosOrderDetailScreen(orderId: s.pathParameters['id'] ?? '')),
-          GoRoute(
-            path: Routes.posOrderSuccess,
-            redirect: (_, _) => ref.read(posLastSaleProvider) == null ? Routes.posProducts : null, // nothing was just sold (a page reload)
-            builder: (_, _) => const PosOrderSuccessScreen(),
-          ),
-          GoRoute(path: '${Routes.posReceipt}/:id', builder: (_, s) => PosReceiptScreen(orderId: s.pathParameters['id'] ?? '')),
-          GoRoute(path: Routes.posStaff, builder: (_, _) => const PosStaffScreen()),
-          GoRoute(path: Routes.posAllStaff, builder: (_, _) => const PosAllStaffScreen()),
-          GoRoute(path: '${Routes.posStaffMember}/:id', builder: (_, s) => PosStaffDetailScreen(staffId: s.pathParameters['id'] ?? '')),
-          GoRoute(path: '${Routes.posStatusHistory}/:id', builder: (_, s) => PosStatusHistoryScreen(staffId: s.pathParameters['id'] ?? '', name: s.uri.queryParameters['name'] ?? '')),
-          GoRoute(path: Routes.posRoles, builder: (_, _) => const PosRolesScreen()),
         ],
       ),
     ],

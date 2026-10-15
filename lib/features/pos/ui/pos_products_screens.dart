@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/adaptive_page.dart';
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/strings/strings_scope.dart';
@@ -11,17 +13,25 @@ import '../data/pos_catalog_models.dart';
 import '../logic/pos_cart.dart';
 import '../logic/pos_cart_logic.dart';
 import '../logic/pos_catalog_providers.dart';
+import 'pos_cart_screen.dart'; // PosWithCartPane
 import 'pos_product_grid.dart';
 import 'pos_view_cart_bar.dart';
 import 'pos_widgets.dart';
 
 /// The Products tab: food stores see the chip row and the grid, every other store sees the categories (Jetpack's rule).
+/// On a tablet or a browser wide enough, the live cart sits beside them.
 class PosProductsEntry extends ConsumerWidget {
   const PosProductsEntry({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => ref.watch(posIsFoodProvider) ? const _FoodProducts() : const PosCategoriesScreen(tab: true);
+  Widget build(BuildContext context, WidgetRef ref) => PosWithCartPane(child: ref.watch(posIsFoodProvider) ? const _FoodProducts() : const PosCategoriesScreen(tab: true));
 }
+
+Widget _searchAction(BuildContext context) => IconButton(
+  onPressed: () => context.push(Routes.posSearch),
+  style: IconButton.styleFrom(side: BorderSide(color: context.tk.border)),
+  icon: Icon(Icons.search_rounded, color: context.tk.text1),
+);
 
 // ── food: Register ────────────────────────────────────────────────────────────
 
@@ -38,6 +48,7 @@ class _FoodProductsState extends ConsumerState<_FoodProducts> {
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final cats = ref.watch(posCategoriesProvider).value ?? const <PosCategory>[];
     final cart = ref.watch(posCartProvider);
 
@@ -50,33 +61,46 @@ class _FoodProductsState extends ConsumerState<_FoodProducts> {
       ),
     );
 
-    return SafeArea(
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
-            child: Row(children: [
-              Expanded(child: Text(context.str('pos_posdashboardscreen_action_register'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: tk.text1))),
-              IconButton(onPressed: () => context.push(Routes.posSearch), icon: const Icon(Icons.search_rounded)),
-            ]),
+    final chips = SizedBox(
+      height: 48,
+      child: Row(children: [
+        Expanded(
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: wide ? 0 : 16),
+            children: [chip(context.str('pos_posregisterscreen_all'), ''), for (final c in cats) chip(c.name, c.id, badge: countForCategory(cart, c.id))],
           ),
-          SizedBox(
-            height: 48,
-            child: Row(children: [
-              Expanded(
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [chip(context.str('pos_posregisterscreen_all'), ''), for (final c in cats) chip(c.name, c.id, badge: countForCategory(cart, c.id))],
-                ),
-              ),
-              TextButton(onPressed: () => context.push(Routes.posCategories), child: Text(context.str('pos_posregisterscreen_see_all'))),
-            ]),
-          ),
-          Expanded(child: PosProductGrid(key: ValueKey(_categoryId), productsKey: PosProductsKey(_categoryId))),
-          const PosViewCartBar(),
-        ],
-      ),
+        ),
+        TextButton(onPressed: () => context.push(Routes.posCategories), child: Text(context.str('pos_posregisterscreen_see_all'))),
+      ]),
+    );
+    final grid = PosProductGrid(key: ValueKey(_categoryId), productsKey: PosProductsKey(_categoryId), padding: wide ? const EdgeInsets.fromLTRB(0, 6, 0, 8) : const EdgeInsets.fromLTRB(12, 8, 12, 8));
+
+    if (!wide) {
+      return SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+              child: Row(children: [
+                Expanded(child: Text(context.str('pos_posdashboardscreen_action_register'), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: tk.text1))),
+                IconButton(onPressed: () => context.push(Routes.posSearch), icon: const Icon(Icons.search_rounded)),
+              ]),
+            ),
+            chips,
+            Expanded(child: grid),
+            const PosViewCartBar(),
+          ],
+        ),
+      );
+    }
+
+    // tablet and browser: the store app's page header, the chips, the grid
+    return AdaptivePage(
+      title: context.str('pos_posdashboardscreen_action_register'),
+      subtitle: context.str('pos_posregisterscreen_select_products'),
+      actions: [_searchAction(context)],
+      child: Column(children: [chips, Expanded(child: grid), const PosViewCartBar()]),
     );
   }
 }
@@ -91,6 +115,7 @@ class PosCategoriesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final async = ref.watch(posCategoriesProvider);
     final cats = async.value;
     final cart = ref.watch(posCartProvider);
@@ -114,7 +139,7 @@ class PosCategoriesScreen extends ConsumerWidget {
         },
         child: GridView.builder(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          padding: wide ? const EdgeInsets.fromLTRB(0, 6, 0, 16) : const EdgeInsets.fromLTRB(12, 8, 12, 12),
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 190, mainAxisSpacing: 10, crossAxisSpacing: 10, mainAxisExtent: 170),
           itemCount: cats.length,
           itemBuilder: (_, i) {
@@ -143,15 +168,19 @@ class PosCategoriesScreen extends ConsumerWidget {
     }
 
     final content = Column(children: [Expanded(child: body), const PosViewCartBar()]);
+
     if (tab) {
-      return SafeArea(
-        child: Column(children: [
-          Padding(padding: const EdgeInsets.fromLTRB(16, 12, 8, 4), child: Row(children: [Expanded(child: Text(context.str(titleKey), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: tk.text1))), IconButton(onPressed: () => context.push(Routes.posSearch), icon: const Icon(Icons.search_rounded))])),
-          Expanded(child: content),
-        ]),
-      );
+      if (!wide) {
+        return SafeArea(
+          child: Column(children: [
+            Padding(padding: const EdgeInsets.fromLTRB(16, 12, 8, 4), child: Row(children: [Expanded(child: Text(context.str(titleKey), style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: tk.text1))), IconButton(onPressed: () => context.push(Routes.posSearch), icon: const Icon(Icons.search_rounded))])),
+            Expanded(child: content),
+          ]),
+        );
+      }
+      return AdaptivePage(title: context.str(titleKey), actions: [_searchAction(context)], child: content);
     }
-    return PosPage(title: context.str(titleKey), back: Routes.posProducts, child: content);
+    return PosWithCartPane(child: PosPage(title: context.str(titleKey), back: Routes.posProducts, child: content));
   }
 }
 
@@ -173,6 +202,7 @@ class _PosCategoryProductsScreenState extends ConsumerState<PosCategoryProductsS
 
   @override
   Widget build(BuildContext context) {
+    final wide = !context.screen.isCompact;
     final subs = widget.hasSub ? (ref.watch(posSubcategoriesProvider(widget.categoryId)).value ?? const <PosCategory>[]) : const <PosCategory>[];
 
     Widget chip(String label, String id) => Padding(
@@ -180,19 +210,21 @@ class _PosCategoryProductsScreenState extends ConsumerState<PosCategoryProductsS
       child: ChoiceChip(label: Text(label), selected: _subId == id, onSelected: (_) => setState(() => _subId = id)),
     );
 
-    return PosPage(
-      title: widget.name,
-      back: Routes.posProducts,
-      child: Column(
-        children: [
-          if (subs.isNotEmpty)
-            SizedBox(
-              height: 52,
-              child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), children: [chip(context.str('pos_posregisterscreen_all'), ''), for (final s in subs) chip(s.name, s.id)]),
-            ),
-          Expanded(child: PosProductGrid(key: ValueKey('${widget.categoryId}/$_subId'), productsKey: PosProductsKey(widget.categoryId, _subId))),
-          const PosViewCartBar(),
-        ],
+    return PosWithCartPane(
+      child: PosPage(
+        title: widget.name,
+        back: Routes.posProducts,
+        child: Column(
+          children: [
+            if (subs.isNotEmpty)
+              SizedBox(
+                height: 52,
+                child: ListView(scrollDirection: Axis.horizontal, padding: EdgeInsets.symmetric(horizontal: wide ? 0 : 16, vertical: 6), children: [chip(context.str('pos_posregisterscreen_all'), ''), for (final s in subs) chip(s.name, s.id)]),
+              ),
+            Expanded(child: PosProductGrid(key: ValueKey('${widget.categoryId}/$_subId'), productsKey: PosProductsKey(widget.categoryId, _subId), padding: wide ? const EdgeInsets.fromLTRB(0, 6, 0, 8) : const EdgeInsets.fromLTRB(12, 8, 12, 8))),
+            const PosViewCartBar(),
+          ],
+        ),
       ),
     );
   }

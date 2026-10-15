@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/adaptive_page.dart';
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/strings/strings_scope.dart';
 import '../logic/pos_shift_logic.dart';
 import '../logic/pos_staff_logic.dart';
 
-/// A pushed POS page: a back arrow, a title, and the content centred at a comfortable width.
+/// A pushed POS page. Phone: an app bar, as before. Tablet and browser: the store app's website-style page header (AdaptivePage).
 class PosPage extends StatelessWidget {
-  const PosPage({super.key, required this.title, required this.child, this.actions, this.back = Routes.posMore});
+  const PosPage({super.key, required this.title, required this.child, this.actions, this.back = Routes.posMore, this.subtitle});
 
   final String title;
+  final String? subtitle; // wide screens only: shown under the title
   final Widget child;
   final List<Widget>? actions;
   final String back; // where the arrow goes when there is nothing to go back to
@@ -19,15 +22,20 @@ class PosPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;
-    return Scaffold(
-      backgroundColor: tk.canvas,
-      appBar: AppBar(
-        title: Text(title),
-        actions: actions,
-        leading: IconButton(onPressed: () => context.canPop() ? context.pop() : context.go(back), icon: const Icon(Icons.arrow_back_rounded)),
-      ),
-      body: SafeArea(child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720), child: child))),
-    );
+    if (context.screen.isCompact) {
+      return Scaffold(
+        backgroundColor: tk.canvas,
+        appBar: AppBar(
+          title: Text(title),
+          actions: actions,
+          leading: IconButton(onPressed: () => context.canPop() ? context.pop() : context.go(back), icon: const Icon(Icons.arrow_back_rounded)),
+        ),
+        body: SafeArea(child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720), child: child))),
+      );
+    }
+    final page = AdaptivePage(title: title, subtitle: subtitle, actions: actions ?? const [], fallbackRoute: back, child: child);
+    // inside the POS frame the Scaffold is already there; on a page outside it, this one supplies it
+    return Scaffold.maybeOf(context) != null ? Material(color: tk.canvas, child: page) : Scaffold(backgroundColor: tk.canvas, body: page);
   }
 }
 
@@ -73,6 +81,7 @@ class PosStat extends StatelessWidget {
       decoration: BoxDecoration(color: tk.surface, borderRadius: BorderRadius.circular(Radii.lg), border: Border.all(color: tk.border)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: tk.text3)),
           const SizedBox(height: 6),
@@ -144,4 +153,14 @@ class PosStaffStatusChip extends StatelessWidget {
     final text = s == StaffStatus.unknown && serverText.isNotEmpty ? serverText : context.str(statusTextKey(s));
     return PosChip(text, c);
   }
+}
+/// A row whose children all take the height of the tallest one. Safe inside a scroll view,
+/// where a plain Row with CrossAxisAlignment.stretch has no height to stretch to.
+class PosEqualRow extends StatelessWidget {
+  const PosEqualRow({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: children));
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/adaptive_page.dart';
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/router/routes.dart';
 import '../../../core/strings/strings_scope.dart';
@@ -13,46 +15,132 @@ import '../logic/pos_shift_providers.dart';
 import 'pos_widgets.dart';
 
 /// "My Shift History": the staff member's past shifts, page by page. Jetpack's "shift_history".
+/// Phone: cards in one column. Tablet: cards in two columns. Wide tablet and browser: the store app's page header and a table.
 class PosShiftHistoryScreen extends ConsumerWidget {
   const PosShiftHistoryScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final st = ref.watch(posShiftHistoryProvider);
     final ctrl = ref.read(posShiftHistoryProvider.notifier);
     final items = st.items;
     final currency = ref.watch(posCurrencyProvider);
+    final title = context.str('pos_possessionhistoryscreen_my_shift_history');
 
-    final Widget body;
-    if (st.showShimmer) {
-      body = const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: ListSkeleton());
-    } else if (st.showError) {
-      body = FinanceMessage(icon: Icons.cloud_off_rounded, title: context.str('common_allscreen_something_went_wrong'), actionKey: 'pos_possessionhistoryscreen_retry', onAction: ctrl.refresh);
-    } else if (items.isEmpty && st.loadedOnce && !st.hasMore) {
-      body = FinanceMessage(icon: Icons.history_rounded, title: context.str('pos_possessionhistoryscreen_no_session_history'), message: context.str('pos_possessionhistoryscreen_past_sessions_will_appear_here'));
-    } else {
-      body = NotificationListener<ScrollNotification>(
-        onNotification: (n) {
-          if (n.metrics.extentAfter < 500) ctrl.loadMore();
-          return false;
-        },
-        child: ListView.separated(
+    String cash(double? v) => v == null ? '—' : money(currency, posAmountText(v));
+
+    // the states that are the same on every width
+    Widget? state() {
+      if (st.showShimmer) return const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: ListSkeleton());
+      if (st.showError) return FinanceMessage(icon: Icons.cloud_off_rounded, title: context.str('common_allscreen_something_went_wrong'), actionKey: 'pos_possessionhistoryscreen_retry', onAction: ctrl.refresh);
+      if (items.isEmpty && st.loadedOnce && !st.hasMore) return FinanceMessage(icon: Icons.history_rounded, title: context.str('pos_possessionhistoryscreen_no_session_history'), message: context.str('pos_possessionhistoryscreen_past_sessions_will_appear_here'));
+      return null;
+    }
+
+    Widget scrolling(Widget child) => NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        if (n.metrics.extentAfter < 500) ctrl.loadMore();
+        return false;
+      },
+      child: RefreshIndicator(onRefresh: ctrl.refresh, child: child),
+    );
+
+    final endNote = (!st.hasMore && items.isNotEmpty)
+        ? Padding(padding: const EdgeInsets.all(16), child: Center(child: Text(context.str('pos_possessionhistoryscreen_all_sessions_loaded', [items.length]), style: TextStyle(fontSize: 12.5, color: tk.text3))))
+        : ListFooter(hasMore: st.hasMore, loading: st.isLoadingMore, failed: st.loadMoreError != null, onRetry: ctrl.loadMore);
+
+    // ── cards: one column on a phone, two on a tablet ────────────────────────
+    Widget cards(int cols, {EdgeInsets padding = const EdgeInsets.fromLTRB(16, 8, 16, 32)}) {
+      final rows = (items.length / cols).ceil();
+      return scrolling(
+        ListView.separated(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          itemCount: items.length + 1,
+          padding: padding,
+          itemCount: rows + 1,
           separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (context, i) {
-            if (i < items.length) return _ShiftCard(s: items[i], currency: currency);
-            if (!st.hasMore && items.isNotEmpty) {
-              return Padding(padding: const EdgeInsets.all(16), child: Center(child: Text(context.str('pos_possessionhistoryscreen_all_sessions_loaded', [items.length]), style: TextStyle(fontSize: 12.5, color: context.tk.text3))));
-            }
-            return ListFooter(hasMore: st.hasMore, loading: st.isLoadingMore, failed: st.loadMoreError != null, onRetry: ctrl.loadMore);
+            if (i == rows) return endNote;
+            return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              for (var c = 0; c < cols; c++) ...[
+                if (c > 0) const SizedBox(width: 10),
+                Expanded(child: i * cols + c < items.length ? _ShiftCard(s: items[i * cols + c], currency: currency) : const SizedBox.shrink()),
+              ],
+            ]);
           },
         ),
       );
     }
 
-    return PosPage(title: context.str('pos_possessionhistoryscreen_my_shift_history'), back: Routes.posSessions, child: RefreshIndicator(onRefresh: ctrl.refresh, child: body));
+    // ── the table: browser and wide tablet ───────────────────────────────────
+    Widget table() {
+      Widget head(String key, {int flex = 1, TextAlign align = TextAlign.start}) => Expanded(flex: flex, child: Text(context.str(key), textAlign: align, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: tk.text3)));
+      Widget cell(String text, {int flex = 1, TextAlign align = TextAlign.start, bool bold = false, Color? color}) => Expanded(flex: flex, child: Text(text, textAlign: align, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13.5, fontWeight: bold ? FontWeight.w800 : FontWeight.w500, color: color ?? tk.text1)));
+      String when(String raw) => raw.isEmpty ? '—' : posDateTime(context, raw);
+
+      Widget row(PosShift s) {
+        final diff = s.cashDiff;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: tk.border))),
+          child: Row(children: [
+            cell(s.terminalName.isEmpty ? '#${s.sessionId}' : s.terminalName, flex: 14, bold: true),
+            cell(s.staffName, flex: 12, color: tk.text2),
+            cell(when(s.loginAt), flex: 18, color: tk.text2),
+            cell(when(s.logoutAt), flex: 18, color: tk.text2),
+            cell(cash(s.openingCash), flex: 10, align: TextAlign.end),
+            cell(cash(s.closingCash), flex: 10, align: TextAlign.end),
+            cell(diff == null ? '—' : '${diff > 0 ? '+' : ''}${cash(diff)}', flex: 11, align: TextAlign.end, bold: true, color: diff == null ? null : (diff < 0 ? tk.danger : tk.success)),
+            Expanded(flex: 12, child: Align(alignment: AlignmentDirectional.centerEnd, child: PosChip(s.isActive ? context.str('pos_possessionhistoryscreen_active') : s.status, s.isActive ? tk.success : tk.text3))),
+          ]),
+        );
+      }
+
+      return scrolling(
+        ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 24),
+          children: [
+            Card(
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: Column(children: [
+                Container(
+                  color: tk.sunken,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(children: [
+                    head('pos_possessionhistoryscreen_col_terminal', flex: 14),
+                    head('pos_possessionhistoryscreen_col_staff', flex: 12),
+                    head('pos_possessionhistoryscreen_col_started', flex: 18),
+                    head('pos_possessionhistoryscreen_col_ended', flex: 18),
+                    head('pos_posallsessionsscreen_opening', flex: 10, align: TextAlign.end),
+                    head('pos_possessiondetailscreen_info_closing_cash', flex: 10, align: TextAlign.end),
+                    head('pos_possessionhistoryscreen_cash_diff', flex: 11, align: TextAlign.end),
+                    head('pos_possessionhistoryscreen_col_status', flex: 12, align: TextAlign.end),
+                  ]),
+                ),
+                for (final s in items) row(s),
+              ]),
+            ),
+            endNote,
+          ],
+        ),
+      );
+    }
+
+    // ══ phone: exactly what it was ════════════════════════════════════════════
+    if (!wide) {
+      return PosPage(title: title, back: Routes.posSessions, child: state() ?? cards(1));
+    }
+
+    // ══ tablet and browser ════════════════════════════════════════════════════
+    return AdaptivePage(
+      title: title,
+      subtitle: items.isEmpty ? null : context.str('pos_possessionhistoryscreen_all_sessions_loaded', [items.length]),
+      fallbackRoute: Routes.posSessions,
+      child: LayoutBuilder(builder: (context, box) => state() ?? (box.maxWidth >= 860 ? table() : cards(2, padding: const EdgeInsets.fromLTRB(0, 4, 0, 32)))),
+    );
   }
 }
 

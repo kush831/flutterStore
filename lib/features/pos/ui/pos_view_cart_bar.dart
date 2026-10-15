@@ -11,12 +11,23 @@ import '../logic/pos_auth.dart';
 import '../logic/pos_cart.dart';
 import '../logic/pos_shift_logic.dart';
 
+/// Set around the products while the cart panel is beside them: the "View cart" bar is not needed then.
+class PosCartPaneVisible extends InheritedWidget {
+  const PosCartPaneVisible({super.key, required super.child});
+
+  static bool of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<PosCartPaneVisible>() != null;
+
+  @override
+  bool updateShouldNotify(PosCartPaneVisible old) => false;
+}
+
 /// "3 item(s) in cart · View cart ₹560": shown at the bottom of every selling screen once the cart has something in it.
 class PosViewCartBar extends ConsumerWidget {
   const PosViewCartBar({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (PosCartPaneVisible.of(context)) return const SizedBox.shrink(); // the cart is already beside the products
     final count = ref.watch(posCartCountProvider);
     if (count == 0) return const SizedBox.shrink();
     final total = ref.watch(posCartTotalProvider);

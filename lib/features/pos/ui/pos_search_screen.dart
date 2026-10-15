@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/network/error_text.dart';
 import '../../../core/router/routes.dart';
@@ -15,6 +16,7 @@ import '../../finance/ui/finance_widgets.dart'; // FinanceMessage
 import '../data/pos_catalog_models.dart';
 import '../logic/pos_catalog_providers.dart';
 import '../logic/pos_search_logic.dart';
+import 'pos_cart_screen.dart'; // PosWithCartPane
 import 'pos_product_card.dart';
 import 'pos_view_cart_bar.dart';
 import 'pos_widgets.dart';
@@ -22,6 +24,7 @@ import 'pos_widgets.dart';
 bool get _canScan => !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
 /// Search products and categories, or scan a barcode. Jetpack's PosSearchScreen.
+/// Phone: as it was. Tablet and browser: the store app's page header, the categories two to a row, and the live cart beside the results.
 class PosSearchScreen extends ConsumerStatefulWidget {
   const PosSearchScreen({super.key});
 
@@ -68,8 +71,10 @@ class _PosSearchScreenState extends ConsumerState<PosSearchScreen> {
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final ready = searchReady(_applied);
     final async = ready ? ref.watch(posSearchResultsProvider(_applied)) : null;
+    final hPad = wide ? 0.0 : 12.0;
 
     Widget prompt() => Center(
       child: Padding(
@@ -85,32 +90,46 @@ class _PosSearchScreenState extends ConsumerState<PosSearchScreen> {
       ),
     );
 
+    Widget categoryCard(PosSearchCategory c) => Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: [
+        ListTile(
+          onTap: () => _openCategory(c.id, c.name, hasSub: c.subs.isNotEmpty),
+          leading: ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox(width: 44, height: 44, child: c.image.isEmpty ? ColoredBox(color: tk.sunken, child: Icon(Icons.category_outlined, color: tk.text3)) : CachedNetworkImage(imageUrl: c.image, fit: BoxFit.cover, memCacheWidth: 140, errorWidget: (_, _, _) => ColoredBox(color: tk.sunken)))),
+          title: Text(c.name, style: TextStyle(fontWeight: FontWeight.w700, color: tk.text1)),
+          trailing: Icon(Icons.chevron_right_rounded, color: tk.text3),
+        ),
+        if (c.subs.isNotEmpty) Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 12), child: Align(alignment: AlignmentDirectional.centerStart, child: Wrap(spacing: 8, runSpacing: 6, children: [for (final s in c.subs) ActionChip(label: Text(s.name), onPressed: () => _openCategory(s.id, s.name))]))),
+      ]),
+    );
+
     Widget results(PosSearchResult r) {
       Widget label(String key) => Padding(padding: const EdgeInsets.fromLTRB(4, 14, 4, 8), child: Text(context.str(key), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: tk.text3)));
+
+      // the categories: one to a row on a phone, two to a row when there is room
+      Widget categories() => LayoutBuilder(builder: (context, box) {
+        final cols = (wide && box.maxWidth >= 560) ? 2 : 1;
+        final rows = (r.categories.length / cols).ceil();
+        return Column(children: [
+          for (var i = 0; i < rows; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                for (var c = 0; c < cols; c++) ...[
+                  if (c > 0) const SizedBox(width: 8),
+                  Expanded(child: i * cols + c < r.categories.length ? categoryCard(r.categories[i * cols + c]) : const SizedBox.shrink()),
+                ],
+              ]),
+            ),
+        ]);
+      });
+
       return ListView(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+        padding: EdgeInsets.fromLTRB(hPad, 4, hPad, 16),
         children: [
           Padding(padding: const EdgeInsets.fromLTRB(4, 8, 4, 0), child: Text(context.str('pos_possearchscreen_results_count', [r.count]), style: TextStyle(color: tk.text2))),
-          if (r.categories.isNotEmpty) ...[
-            label('pos_possearchscreen_categories'),
-            for (final c in r.categories)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Card(
-                  margin: EdgeInsets.zero,
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(children: [
-                    ListTile(
-                      onTap: () => _openCategory(c.id, c.name, hasSub: c.subs.isNotEmpty),
-                      leading: ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox(width: 44, height: 44, child: c.image.isEmpty ? ColoredBox(color: tk.sunken, child: Icon(Icons.category_outlined, color: tk.text3)) : CachedNetworkImage(imageUrl: c.image, fit: BoxFit.cover, memCacheWidth: 140, errorWidget: (_, _, _) => ColoredBox(color: tk.sunken)))),
-                      title: Text(c.name, style: TextStyle(fontWeight: FontWeight.w700, color: tk.text1)),
-                      trailing: Icon(Icons.chevron_right_rounded, color: tk.text3),
-                    ),
-                    if (c.subs.isNotEmpty) Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 12), child: Align(alignment: AlignmentDirectional.centerStart, child: Wrap(spacing: 8, runSpacing: 6, children: [for (final s in c.subs) ActionChip(label: Text(s.name), onPressed: () => _openCategory(s.id, s.name))]))),
-                  ]),
-                ),
-              ),
-          ],
+          if (r.categories.isNotEmpty) ...[label('pos_possearchscreen_categories'), categories()],
           if (r.products.isNotEmpty) ...[
             label('pos_possearchscreen_products'),
             GridView.builder(
@@ -138,34 +157,40 @@ class _PosSearchScreenState extends ConsumerState<PosSearchScreen> {
       );
     }
 
-    return PosPage(
-      title: context.str('pos_possearchscreen_title'),
-      back: Routes.posProducts,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: _field,
-                  autofocus: true,
-                  textInputAction: TextInputAction.search,
-                  onChanged: _typed,
-                  onSubmitted: _searchNow,
-                  decoration: InputDecoration(
-                    hintText: context.str('pos_possearchscreen_placeholder'),
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: _field.text.isEmpty ? null : IconButton(onPressed: () { _field.clear(); _searchNow(''); }, icon: const Icon(Icons.close_rounded)),
-                  ),
-                ),
-              ),
-              if (_canScan) ...[const SizedBox(width: 8), IconButton.filledTonal(onPressed: _scan, tooltip: context.str('pos_possearchscreen_scan'), icon: const Icon(Icons.qr_code_scanner_rounded))],
-            ]),
+    final searchRow = Padding(
+      padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 4),
+      child: Row(children: [
+        Expanded(
+          child: TextField(
+            controller: _field,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onChanged: _typed,
+            onSubmitted: _searchNow,
+            decoration: InputDecoration(
+              hintText: context.str('pos_possearchscreen_placeholder'),
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: _field.text.isEmpty ? null : IconButton(onPressed: () { _field.clear(); _searchNow(''); }, icon: const Icon(Icons.close_rounded)),
+            ),
           ),
-          Expanded(child: body),
-          const PosViewCartBar(),
-        ],
+        ),
+        if (_canScan) ...[const SizedBox(width: 8), IconButton.filledTonal(onPressed: _scan, tooltip: context.str('pos_possearchscreen_scan'), icon: const Icon(Icons.qr_code_scanner_rounded))],
+      ]),
+    );
+
+    // the live cart sits beside the results when there is room and something in the cart
+    return PosWithCartPane(
+      child: PosPage(
+        title: context.str('pos_possearchscreen_title'),
+        subtitle: context.str('pos_possearchscreen_subtitle'),
+        back: Routes.posProducts,
+        child: Column(
+          children: [
+            searchRow,
+            Expanded(child: body),
+            const PosViewCartBar(),
+          ],
+        ),
       ),
     );
   }

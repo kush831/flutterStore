@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/adaptive_page.dart';
 import '../../../core/design/app_snack.dart';
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/network/error_text.dart';
 import '../../../core/router/routes.dart';
@@ -28,12 +30,14 @@ void _roleChanged(WidgetRef ref) {
 }
 
 /// The roles of the store, with the way to create, edit and delete them. Jetpack's POSManageRolesScreen.
+/// Phone: cards in one column. Tablet and browser: the store app's page header, and the roles in a grid of cards.
 class PosRolesScreen extends ConsumerWidget {
   const PosRolesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final async = ref.watch(posRolesProvider);
     final roles = async.value;
 
@@ -68,55 +72,92 @@ class PosRolesScreen extends ConsumerWidget {
       }
     }
 
-    final Widget body;
-    if (roles == null) {
-      body = async.hasError
-          ? FinanceMessage(icon: Icons.cloud_off_rounded, title: errorText(async.error!, ref.read(stringsProvider)), actionKey: 'pos_posstaffscreen_retry', onAction: () async => ref.invalidate(posRolesProvider))
-          : const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: ListSkeleton());
-    } else if (roles.isEmpty) {
-      body = FinanceMessage(icon: Icons.admin_panel_settings_outlined, title: context.str('pos_posrolesscreen_noRoleCreatedAt'), message: context.str('pos_posrolesscreen_tapToCreateYourFirstRole'));
-    } else {
-      body = RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(posRolesProvider);
-          try {
-            await ref.read(posRolesProvider.future);
-          } catch (_) {}
-        },
-        child: ListView.separated(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          itemCount: roles.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (_, i) {
-            final r = roles[i];
-            return Card(
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-                child: Row(children: [
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [Flexible(child: Text(r.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: tk.text1))), if (r.isSystem) ...[const SizedBox(width: 8), PosChip(context.str('pos_posstaffscreen_system'), tk.info)]]),
-                      if (r.description.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(r.description, style: TextStyle(color: tk.text2))),
-                      const SizedBox(height: 4),
-                      Text('${r.permissionCount} ${context.str('pos_posrolesscreen_perms')}${r.createdAt.isEmpty ? '' : '  ·  ${posDateTime(context, r.createdAt)}'}', style: TextStyle(fontSize: 12.5, color: tk.text3)),
-                    ]),
-                  ),
-                  IconButton(onPressed: () => edit(r), tooltip: context.str('pos_posrolesscreen_edit_role'), icon: const Icon(Icons.edit_outlined)),
-                  if (canDeleteRole(r)) IconButton(onPressed: () => delete(r), tooltip: context.str('pos_posrolesscreen_delete_role'), icon: Icon(Icons.delete_outline_rounded, color: tk.danger)),
-                ]),
-              ),
-            );
-          },
-        ),
+    Future<void> refresh() async {
+      ref.invalidate(posRolesProvider);
+      try {
+        await ref.read(posRolesProvider.future);
+      } catch (_) {}
+    }
+
+    // the same card on every width
+    Widget roleCard(PosRole r) => Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [Flexible(child: Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: tk.text1))), if (r.isSystem) ...[const SizedBox(width: 8), PosChip(context.str('pos_posstaffscreen_system'), tk.info)]]),
+              if (r.description.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(r.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: tk.text2))),
+              const SizedBox(height: 4),
+              Text('${r.permissionCount} ${context.str('pos_posrolesscreen_perms')}${r.createdAt.isEmpty ? '' : '  ·  ${posDateTime(context, r.createdAt)}'}', style: TextStyle(fontSize: 12.5, color: tk.text3)),
+            ]),
+          ),
+          IconButton(onPressed: () => edit(r), tooltip: context.str('pos_posrolesscreen_edit_role'), icon: const Icon(Icons.edit_outlined)),
+          if (canDeleteRole(r)) IconButton(onPressed: () => delete(r), tooltip: context.str('pos_posrolesscreen_delete_role'), icon: Icon(Icons.delete_outline_rounded, color: tk.danger)),
+        ]),
+      ),
+    );
+
+    // ── before the roles are here ────────────────────────────────────────────
+    Widget? state() {
+      if (roles == null) {
+        return async.hasError
+            ? FinanceMessage(icon: Icons.cloud_off_rounded, title: errorText(async.error!, ref.read(stringsProvider)), actionKey: 'pos_posstaffscreen_retry', onAction: () async => ref.invalidate(posRolesProvider))
+            : const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: ListSkeleton());
+      }
+      if (roles.isEmpty) return FinanceMessage(icon: Icons.admin_panel_settings_outlined, title: context.str('pos_posrolesscreen_noRoleCreatedAt'), message: context.str('pos_posrolesscreen_tapToCreateYourFirstRole'));
+      return null;
+    }
+
+    // ══ phone: exactly what it was ════════════════════════════════════════════
+    if (!wide) {
+      final Widget body = state() ??
+          RefreshIndicator(
+            onRefresh: refresh,
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              itemCount: roles!.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (_, i) => roleCard(roles[i]),
+            ),
+          );
+      return PosPage(
+        title: context.str('pos_posstaffscreen_roles_permissions'),
+        back: Routes.posStaff,
+        actions: [IconButton(onPressed: create, tooltip: context.str('pos_posrolesscreen_create_role'), icon: const Icon(Icons.person_add_alt_1_outlined))],
+        child: body,
       );
     }
 
-    return PosPage(
+    // ══ tablet and browser: the roles in a grid of cards ══════════════════════
+    final Widget body = state() ??
+        LayoutBuilder(builder: (context, box) {
+          final cols = box.maxWidth >= 980 ? 3 : (box.maxWidth >= 620 ? 2 : 1);
+          final rows = (roles!.length / cols).ceil();
+          return RefreshIndicator(
+            onRefresh: refresh,
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 40),
+              itemCount: rows,
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (_, i) => PosEqualRow(children: [
+                for (var c = 0; c < cols; c++) ...[
+                  if (c > 0) const SizedBox(width: 12),
+                  Expanded(child: i * cols + c < roles.length ? roleCard(roles[i * cols + c]) : const SizedBox.shrink()),
+                ],
+              ]),
+            ),
+          );
+        });
+
+    return AdaptivePage(
       title: context.str('pos_posstaffscreen_roles_permissions'),
-      back: Routes.posStaff,
-      actions: [IconButton(onPressed: create, tooltip: context.str('pos_posrolesscreen_create_role'), icon: const Icon(Icons.person_add_alt_1_outlined))],
+      subtitle: context.str('pos_posrolesscreen_subtitle'),
+      fallbackRoute: Routes.posStaff,
+      actions: [FilledButton.icon(onPressed: create, style: FilledButton.styleFrom(minimumSize: const Size(0, 44)), icon: const Icon(Icons.add_rounded, size: 20), label: Text(context.str('pos_posrolesscreen_create_role')))],
       child: body,
     );
   }
@@ -125,10 +166,12 @@ class PosRolesScreen extends ConsumerWidget {
 // ── the role editor (create and edit) ─────────────────────────────────────────
 
 /// Create a role (role == null) or edit one. Returns true when it was saved.
+/// Phone: a bottom sheet. Tablet and browser: a wider dialog with the permission groups in two columns.
 Future<bool?> showRoleEditor(BuildContext context, {PosRole? role}) {
   final body = _RoleEditor(role: role);
-  if (MediaQuery.sizeOf(context).width >= 600) {
-    return showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => Dialog(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560, maxHeight: 780), child: body)));
+  final width = MediaQuery.sizeOf(context).width;
+  if (width >= 600) {
+    return showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => Dialog(child: ConstrainedBox(constraints: BoxConstraints(maxWidth: width >= 900 ? 760 : 560, maxHeight: 800), child: body)));
   }
   return showModalBottomSheet<bool>(context: context, isScrollControlled: true, isDismissible: false, useSafeArea: true, builder: (_) => body);
 }
@@ -201,6 +244,34 @@ class _RoleEditorState extends ConsumerState<_RoleEditor> {
     final ready = data != null && roleFormReady(_name.text, chosen.length);
     final groups = data == null ? const <String, List<PosPermission>>{} : groupPermissions(data.all);
 
+    Widget groupCard(MapEntry<String, List<PosPermission>> g) => Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(padding: const EdgeInsets.only(left: 8, bottom: 4), child: Text(g.key, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: context.primary))),
+          for (final p in g.value)
+            CheckboxListTile(
+              dense: true,
+              value: chosen.contains(p.id),
+              onChanged: _busy ? null : (_) => setState(() => _chosen = togglePermission(chosen, p.id)),
+              title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: p.description.isEmpty ? null : Text(p.description, style: TextStyle(fontSize: 12, color: tk.text3)),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+        ]),
+      ),
+    );
+
+    // the groups in two columns when the editor is wide, one column on a phone
+    Widget groupsView() => LayoutBuilder(builder: (context, box) {
+      final entries = groups.entries.toList();
+      Widget col(List<MapEntry<String, List<PosPermission>>> es) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (var i = 0; i < es.length; i++) ...[if (i > 0) const SizedBox(height: 10), groupCard(es[i])]]);
+      if (box.maxWidth < 560 || entries.length < 2) return col(entries);
+      final half = (entries.length + 1) ~/ 2;
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: col(entries.sublist(0, half))), const SizedBox(width: 10), Expanded(child: col(entries.sublist(half)))]);
+    });
+
     return SafeArea(
       child: Column(
         children: [
@@ -230,28 +301,7 @@ class _RoleEditorState extends ConsumerState<_RoleEditor> {
                     Text('${chosen.length}${context.str('pos_posrolesscreen_selected_suffix')}', style: TextStyle(fontWeight: FontWeight.w700, color: context.primary)),
                   ]),
                   const SizedBox(height: 8),
-                  for (final g in groups.entries)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Card(
-                        margin: EdgeInsets.zero,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 12, 8, 6),
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Padding(padding: const EdgeInsets.only(left: 8, bottom: 4), child: Text(g.key, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: context.primary))),
-                            for (final p in g.value)
-                              CheckboxListTile(
-                                dense: true,
-                                value: chosen.contains(p.id),
-                                onChanged: _busy ? null : (_) => setState(() => _chosen = togglePermission(chosen, p.id)),
-                                title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                subtitle: p.description.isEmpty ? null : Text(p.description, style: TextStyle(fontSize: 12, color: tk.text3)),
-                                controlAffinity: ListTileControlAffinity.leading,
-                              ),
-                          ]),
-                        ),
-                      ),
-                    ),
+                  groupsView(),
                 ],
                 if (_error != null) ...[const SizedBox(height: 10), PosErrorBox(_error!)],
               ],

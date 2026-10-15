@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/adaptive_page.dart';
 import '../../../core/design/app_snack.dart';
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/network/error_text.dart';
-import '../../../core/router/routes.dart';
 import '../../../core/strings/strings_controller.dart';
 import '../../../core/strings/strings_scope.dart';
 import '../../finance/ui/finance_widgets.dart'; // FinanceMessage, ListSkeleton: generic message and loading pieces
@@ -17,6 +18,8 @@ import '../logic/pos_shift_providers.dart';
 import 'pos_terminal_editor.dart';
 import 'pos_widgets.dart';
 
+/// The terminals of the store. Phone: cards in one column, "Add" in the app bar. Tablet and browser: the store app's page
+/// header with an "Add terminal" button, the counters in a row, and the terminals in a grid of cards.
 class PosTerminalsScreen extends ConsumerStatefulWidget {
   const PosTerminalsScreen({super.key});
 
@@ -72,65 +75,122 @@ class _PosTerminalsScreenState extends ConsumerState<PosTerminalsScreen> {
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final canManage = ref.watch(posAuthProvider.select((s) => s.can(PosPerm.terminalManage)));
     final async = ref.watch(posTerminalProvider);
     final all = async.value;
+    final title = context.str('pos_posterminalscreen_terminals');
 
-    final Widget body;
+    // the page around the body: an app bar on a phone, the store's page header on a tablet and a browser
+    Widget page(Widget child, {List<Widget> actions = const []}) => wide
+        ? AdaptivePage(title: title, subtitle: context.str('pos_posterminalscreen_subtitle'), actions: actions, child: child)
+        : PosPage(title: title, actions: actions, child: RefreshIndicator(onRefresh: _refresh, child: child));
+
+    final addButton = !canManage
+        ? null
+        : (wide
+        ? FilledButton.icon(onPressed: _add, style: FilledButton.styleFrom(minimumSize: const Size(0, 44)), icon: const Icon(Icons.add_rounded, size: 20), label: Text(context.str('pos_posterminalscreen_add_terminal')))
+        : TextButton.icon(onPressed: _add, icon: const Icon(Icons.add_rounded, size: 20), label: Text(context.str('pos_posterminalscreen_add'))));
+    final actions = [?addButton];
+
+    // ── not here yet, failed, or empty ───────────────────────────────────────
     if (all == null) {
-      body = async.hasError
-          ? FinanceMessage(icon: Icons.cloud_off_rounded, title: context.str('pos_posterminalscreen_failed_to_load'), actionKey: 'pos_posterminalscreen_try_again', onAction: _refresh)
-          : const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: ListSkeleton());
-    } else if (all.isEmpty) {
-      body = FinanceMessage(
-        icon: Icons.devices_other_outlined,
-        title: context.str('pos_posterminalscreen_no_terminals_yet'),
-        message: context.str('pos_posterminalscreen_empty_subtitle'),
-        actionKey: canManage ? 'pos_posterminalscreen_add_terminal' : null,
-        onAction: canManage ? () async => _add() : null,
+      return page(
+        async.hasError
+            ? FinanceMessage(icon: Icons.cloud_off_rounded, title: context.str('pos_posterminalscreen_failed_to_load'), actionKey: 'pos_posterminalscreen_try_again', onAction: _refresh)
+            : const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: ListSkeleton()),
+        actions: actions,
       );
-    } else {
-      final stats = terminalStats(all);
-      final shown = _availableOnly ? availableOnly(all) : all;
-      body = ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: [
-          Row(children: [
-            Expanded(child: PosStat(label: context.str('pos_posterminalscreen_total'), value: '${stats.total}')),
-            const SizedBox(width: 10),
-            Expanded(child: PosStat(label: context.str('pos_posterminalscreen_available'), value: '${stats.available}', color: tk.success)),
-            const SizedBox(width: 10),
-            Expanded(child: PosStat(label: context.str('pos_posterminalscreen_in_use'), value: '${stats.inUse}', color: tk.warning)),
-          ]),
-          const SizedBox(height: 12),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: FilterChip(label: Text(context.str('pos_posterminalscreen_available_only')), selected: _availableOnly, onSelected: (v) => setState(() => _availableOnly = v)),
-          ),
-          const SizedBox(height: 8),
-          if (shown.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Column(children: [
-                Text(context.str('pos_posterminalscreen_no_available_terminals'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: tk.text1)),
-                const SizedBox(height: 6),
-                Text(context.str('pos_posterminalscreen_all_in_use_message'), textAlign: TextAlign.center, style: TextStyle(color: tk.text2, height: 1.4)),
-                const SizedBox(height: 12),
-                TextButton(onPressed: () => setState(() => _availableOnly = false), child: Text(context.str('pos_posterminalscreen_show_all_terminals'))),
-              ]),
-            )
-          else
-            for (final t in shown) Padding(padding: const EdgeInsets.only(bottom: 10), child: _TerminalCard(t: t, canManage: canManage, onEdit: () => _edit(t), onDelete: () => _delete(t))),
-        ],
+    }
+    if (all.isEmpty) {
+      return page(
+        FinanceMessage(
+          icon: Icons.devices_other_outlined,
+          title: context.str('pos_posterminalscreen_no_terminals_yet'),
+          message: context.str('pos_posterminalscreen_empty_subtitle'),
+          actionKey: canManage ? 'pos_posterminalscreen_add_terminal' : null,
+          onAction: canManage ? () async => _add() : null,
+        ),
+        actions: actions,
       );
     }
 
-    return PosPage(
-      title: context.str('pos_posterminalscreen_terminals'),
-      actions: [if (canManage) TextButton.icon(onPressed: _add, icon: const Icon(Icons.add_rounded, size: 20), label: Text(context.str('pos_posterminalscreen_add')))],
-      child: RefreshIndicator(onRefresh: _refresh, child: body),
+    // ── the pieces ───────────────────────────────────────────────────────────
+    final stats = terminalStats(all);
+    final shown = _availableOnly ? availableOnly(all) : all;
+
+    final counters = <Widget>[
+      PosStat(label: context.str('pos_posterminalscreen_total'), value: '${stats.total}'),
+      PosStat(label: context.str('pos_posterminalscreen_available'), value: '${stats.available}', color: tk.success),
+      PosStat(label: context.str('pos_posterminalscreen_in_use'), value: '${stats.inUse}', color: tk.warning),
+    ];
+
+    final filter = Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: FilterChip(label: Text(context.str('pos_posterminalscreen_available_only')), selected: _availableOnly, onSelected: (v) => setState(() => _availableOnly = v)),
     );
+
+    final noneAvailable = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Column(children: [
+        Text(context.str('pos_posterminalscreen_no_available_terminals'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: tk.text1)),
+        const SizedBox(height: 6),
+        Text(context.str('pos_posterminalscreen_all_in_use_message'), textAlign: TextAlign.center, style: TextStyle(color: tk.text2, height: 1.4)),
+        const SizedBox(height: 12),
+        TextButton(onPressed: () => setState(() => _availableOnly = false), child: Text(context.str('pos_posterminalscreen_show_all_terminals'))),
+      ]),
+    );
+
+    Widget card(PosTerminal t) => _TerminalCard(t: t, canManage: canManage, onEdit: () => _edit(t), onDelete: () => _delete(t));
+
+    // ══ phone: exactly what it was ════════════════════════════════════════════
+    if (!wide) {
+      final body = ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          Row(children: [for (var i = 0; i < counters.length; i++) ...[if (i > 0) const SizedBox(width: 10), Expanded(child: counters[i])]]),
+          const SizedBox(height: 12),
+          filter,
+          const SizedBox(height: 8),
+          if (shown.isEmpty) noneAvailable else for (final t in shown) Padding(padding: const EdgeInsets.only(bottom: 10), child: card(t)),
+        ],
+      );
+      return page(body, actions: actions);
+    }
+
+    // ══ tablet and browser: the terminals in a grid of cards ══════════════════
+    final body = LayoutBuilder(builder: (context, box) {
+      final cols = box.maxWidth >= 980 ? 3 : (box.maxWidth >= 620 ? 2 : 1);
+      final rows = (shown.length / cols).ceil();
+      return RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 40),
+          children: [
+            PosEqualRow(children: [for (var i = 0; i < counters.length; i++) ...[if (i > 0) const SizedBox(width: 12), Expanded(child: counters[i])]]),
+            const SizedBox(height: 16),
+            filter,
+            const SizedBox(height: 12),
+            if (shown.isEmpty)
+              noneAvailable
+            else
+              for (var r = 0; r < rows; r++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: PosEqualRow(children: [
+                    for (var c = 0; c < cols; c++) ...[
+                      if (c > 0) const SizedBox(width: 12),
+                      Expanded(child: r * cols + c < shown.length ? card(shown[r * cols + c]) : const SizedBox.shrink()),
+                    ],
+                  ]),
+                ),
+          ],
+        ),
+      );
+    });
+    return page(body, actions: actions);
   }
 }
 
@@ -159,7 +219,7 @@ class _TerminalCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Expanded(child: Text(t.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: tk.text1))),
+              Expanded(child: Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: tk.text1))),
               if (canManage) IconButton(onPressed: onEdit, tooltip: context.str('pos_posterminalscreen_edit'), icon: Icon(Icons.edit_outlined, size: 20, color: tk.text2)),
               if (canManage) IconButton(onPressed: t.isInUse ? null : onDelete, tooltip: context.str('pos_posterminalscreen_delete'), icon: Icon(Icons.delete_outline_rounded, size: 20, color: t.isInUse ? tk.text3 : tk.danger)),
             ]),

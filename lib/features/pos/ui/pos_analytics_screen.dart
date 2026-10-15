@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design/adaptive_page.dart';
 import '../../../core/design/app_snack.dart';
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/design/skeleton.dart';
 import '../../../core/network/error_text.dart';
@@ -18,6 +20,7 @@ import 'pos_report_widgets.dart';
 import 'pos_widgets.dart';
 
 /// "Analysis": peak hours, best sellers and team insights for today, this week or this month. Jetpack's POSAnalyticsScreen.
+/// Phone: one column. Tablet and browser: the store app's page header, the three figures in a row, and the report cards in two columns.
 class PosAnalyticsScreen extends ConsumerStatefulWidget {
   const PosAnalyticsScreen({super.key});
 
@@ -43,8 +46,10 @@ class _PosAnalyticsScreenState extends ConsumerState<PosAnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final async = ref.watch(posAnalyticsReportProvider(_period.value));
     final r = async.value;
+    final title = context.str('pos_posanalysisscreen_top_bar_title');
 
     Widget kpi(String key, String value, String growth) => Expanded(
       child: Card(
@@ -62,85 +67,149 @@ class _PosAnalyticsScreenState extends ConsumerState<PosAnalyticsScreen> {
       ),
     );
 
-    final Widget body;
-    if (r == null) {
-      body = async.hasError
-          ? FinanceMessage(icon: Icons.cloud_off_rounded, title: errorText(async.error!, ref.read(stringsProvider)), actionKey: 'pos_posanalysisscreen_retry_button', onAction: () async => ref.invalidate(posAnalyticsReportProvider(_period.value)))
-          : const Padding(padding: EdgeInsets.all(16), child: SkeletonPulse(child: Column(children: [SkeletonBox(height: 90, radius: 16), SizedBox(height: 12), SkeletonBox(height: 200, radius: 16), SizedBox(height: 12), SkeletonBox(height: 160, radius: 16)])));
-    } else if (r.isEmpty) {
-      body = FinanceMessage(icon: Icons.insights_outlined, title: context.str('pos_posanalysisscreen_noDataAvailable'));
-    } else {
+    Widget periodChips({double hPad = 16}) => SizedBox(
+      height: 50,
+      child: ListView(scrollDirection: Axis.horizontal, padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 6), children: [
+        for (final p in PosPeriod.values) Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: ChoiceChip(label: Text(context.str(p.labelKey)), selected: p == _period, onSelected: (_) => setState(() => _period = p))),
+      ]),
+    );
+
+    Future<void> refresh() async => ref.invalidate(posAnalyticsReportProvider(_period.value));
+
+    // ── before the report is here, failed, or empty: the same on every width ─
+    Widget? state() {
+      if (r == null) {
+        return async.hasError
+            ? FinanceMessage(icon: Icons.cloud_off_rounded, title: errorText(async.error!, ref.read(stringsProvider)), actionKey: 'pos_posanalysisscreen_retry_button', onAction: () async => ref.invalidate(posAnalyticsReportProvider(_period.value)))
+            : const Padding(padding: EdgeInsets.all(16), child: SkeletonPulse(child: Column(children: [SkeletonBox(height: 90, radius: 16), SizedBox(height: 12), SkeletonBox(height: 200, radius: 16), SizedBox(height: 12), SkeletonBox(height: 160, radius: 16)])));
+      }
+      if (r.isEmpty) return FinanceMessage(icon: Icons.insights_outlined, title: context.str('pos_posanalysisscreen_noDataAvailable'));
+      return null;
+    }
+
+    // ── the cards: built once, laid out one way on a phone and another on a tablet ──
+    Widget? peakCard;
+    Widget? categoryCard;
+    Widget? bestCard;
+    Widget? paymentCard;
+    Widget? staffCard;
+    Widget? kpiRow;
+    if (r != null && !r.isEmpty) {
       final top = topSellers(r.bestItems, 10);
       final maxItem = top.isEmpty ? 0.0 : top.first.revenueRaw;
       final maxStaff = r.staff.fold(0.0, (m, s) => s.revenueRaw > m ? s.revenueRaw : m);
-      body = ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-        children: [
-          Row(children: [
-            kpi('pos_posanalysisscreen_revenue_label', r.revenue.revenue, r.revenue.revenueGrowth),
-            const SizedBox(width: 8),
-            kpi('pos_posanalysisscreen_kpi_orders', '${r.revenue.orders}', r.revenue.ordersGrowth),
-            const SizedBox(width: 8),
-            kpi('pos_posanalysisscreen_kpi_avg_ticket', r.revenue.avgTicket, r.revenue.avgTicketGrowth),
-          ]),
-          const SizedBox(height: 12),
-          PosReportCard(
-            title: context.str('pos_posanalysisscreen_peak_hours_title'),
-            trailing: r.peak.peakHour.isEmpty ? null : Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(r.peak.peakHour, style: TextStyle(fontWeight: FontWeight.w800, color: context.primary)), if (r.peak.peakRevenue.isNotEmpty) Text('${context.str('pos_posanalysisscreen_peak_revenue_label')} ${r.peak.peakRevenue}', style: TextStyle(fontSize: 11.5, color: tk.text3))]),
-            children: [HourlyBars(peak: r.peak)],
-          ),
-          if (r.categories.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            PosReportCard(
-              title: context.str('pos_posanalysisscreen_category_title'),
-              subtitle: context.str('pos_posanalysisscreen_category_subtitle'),
-              children: [for (final c in r.categories) ShareRow(name: c.name, value: c.revenue, share: shareOf(c.percentage), note: c.percentage, trailing: GrowthChip(c.growth, positive: c.isPositive))],
-            ),
-          ],
-          if (top.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            PosReportCard(
-              title: context.str('pos_posanalysisscreen_best_sellers_title'),
-              subtitle: context.str('pos_posanalysisscreen_best_sellers_subtitle'),
-              children: [for (final i in top) ShareRow(name: i.name, value: i.revenue, share: maxItem <= 0 ? 0 : (i.revenueRaw / maxItem).clamp(0.0, 1.0), note: '${i.totalSold}${context.str('pos_posdashboardscreen_sold_suffix')}${i.category.isEmpty ? '' : '  ·  ${i.category}'}', trailing: GrowthChip(i.growth, positive: i.isPositive))],
-            ),
-          ],
-          if (r.payments.breakdown.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            PosReportCard(
-              title: context.str('pos_posanalysisscreen_payment_title'),
-              trailing: r.payments.totalAmount.isEmpty ? null : Text(r.payments.totalAmount, style: TextStyle(fontWeight: FontWeight.w800, color: tk.text1)),
-              children: [for (final p in r.payments.breakdown) ShareRow(name: p.name, value: p.amount, share: (p.percentage / 100).clamp(0.0, 1.0), note: p.percentageText)],
-            ),
-          ],
-          if (r.staff.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            PosReportCard(
-              title: context.str('pos_posanalysisscreen_staff_title'),
-              children: [for (final s in r.staff) ShareRow(name: s.name, value: s.revenue, share: maxStaff <= 0 ? 0 : (s.revenueRaw / maxStaff).clamp(0.0, 1.0), note: '${s.orders} ${context.str('pos_posanalysisscreen_kpi_orders')}${s.avgOrder.isEmpty ? '' : '  ·  ${context.str('pos_posanalysisscreen_kpi_avg_ticket')} ${s.avgOrder}'}')],
-            ),
-          ],
+
+      kpiRow = PosEqualRow(children: [
+        kpi('pos_posanalysisscreen_revenue_label', r.revenue.revenue, r.revenue.revenueGrowth),
+        SizedBox(width: wide ? 12 : 8),
+        kpi('pos_posanalysisscreen_kpi_orders', '${r.revenue.orders}', r.revenue.ordersGrowth),
+        SizedBox(width: wide ? 12 : 8),
+        kpi('pos_posanalysisscreen_kpi_avg_ticket', r.revenue.avgTicket, r.revenue.avgTicketGrowth),
+      ]);
+
+      peakCard = PosReportCard(
+        title: context.str('pos_posanalysisscreen_peak_hours_title'),
+        trailing: r.peak.peakHour.isEmpty ? null : Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(r.peak.peakHour, style: TextStyle(fontWeight: FontWeight.w800, color: context.primary)), if (r.peak.peakRevenue.isNotEmpty) Text('${context.str('pos_posanalysisscreen_peak_revenue_label')} ${r.peak.peakRevenue}', style: TextStyle(fontSize: 11.5, color: tk.text3))]),
+        children: [HourlyBars(peak: r.peak)],
+      );
+
+      if (r.categories.isNotEmpty) {
+        categoryCard = PosReportCard(
+          title: context.str('pos_posanalysisscreen_category_title'),
+          subtitle: context.str('pos_posanalysisscreen_category_subtitle'),
+          children: [for (final c in r.categories) ShareRow(name: c.name, value: c.revenue, share: shareOf(c.percentage), note: c.percentage, trailing: GrowthChip(c.growth, positive: c.isPositive))],
+        );
+      }
+      if (top.isNotEmpty) {
+        bestCard = PosReportCard(
+          title: context.str('pos_posanalysisscreen_best_sellers_title'),
+          subtitle: context.str('pos_posanalysisscreen_best_sellers_subtitle'),
+          children: [for (final i in top) ShareRow(name: i.name, value: i.revenue, share: maxItem <= 0 ? 0 : (i.revenueRaw / maxItem).clamp(0.0, 1.0), note: '${i.totalSold}${context.str('pos_posdashboardscreen_sold_suffix')}${i.category.isEmpty ? '' : '  ·  ${i.category}'}', trailing: GrowthChip(i.growth, positive: i.isPositive))],
+        );
+      }
+      if (r.payments.breakdown.isNotEmpty) {
+        paymentCard = PosReportCard(
+          title: context.str('pos_posanalysisscreen_payment_title'),
+          trailing: r.payments.totalAmount.isEmpty ? null : Text(r.payments.totalAmount, style: TextStyle(fontWeight: FontWeight.w800, color: tk.text1)),
+          children: [for (final p in r.payments.breakdown) ShareRow(name: p.name, value: p.amount, share: (p.percentage / 100).clamp(0.0, 1.0), note: p.percentageText)],
+        );
+      }
+      if (r.staff.isNotEmpty) {
+        staffCard = PosReportCard(
+          title: context.str('pos_posanalysisscreen_staff_title'),
+          children: [for (final s in r.staff) ShareRow(name: s.name, value: s.revenue, share: maxStaff <= 0 ? 0 : (s.revenueRaw / maxStaff).clamp(0.0, 1.0), note: '${s.orders} ${context.str('pos_posanalysisscreen_kpi_orders')}${s.avgOrder.isEmpty ? '' : '  ·  ${context.str('pos_posanalysisscreen_kpi_avg_ticket')} ${s.avgOrder}'}')],
+        );
+      }
+    }
+
+    // ══ phone: exactly what it was ════════════════════════════════════════════
+    if (!wide) {
+      final Widget body = state() ??
+          ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+            children: [
+              kpiRow!,
+              const SizedBox(height: 12),
+              peakCard!,
+              if (categoryCard != null) ...[const SizedBox(height: 12), categoryCard],
+              if (bestCard != null) ...[const SizedBox(height: 12), bestCard],
+              if (paymentCard != null) ...[const SizedBox(height: 12), paymentCard],
+              if (staffCard != null) ...[const SizedBox(height: 12), staffCard],
+            ],
+          );
+      return PosPage(
+        title: title,
+        back: Routes.posMore,
+        actions: [
+          if (r != null && !r.isEmpty) IconButton(onPressed: _exporting ? null : () => _export(r), tooltip: 'PDF', icon: _exporting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2)) : const Icon(Icons.picture_as_pdf_outlined)),
         ],
+        child: Column(children: [
+          Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 4), child: Align(alignment: AlignmentDirectional.centerStart, child: Text(context.str('pos_posanalysisscreen_top_bar_subtitle'), style: TextStyle(color: tk.text2)))),
+          periodChips(),
+          Expanded(child: RefreshIndicator(onRefresh: refresh, child: body)),
+        ]),
       );
     }
 
-    return PosPage(
-      title: context.str('pos_posanalysisscreen_top_bar_title'),
-      back: Routes.posMore,
+    // ══ tablet and browser: the report cards in two columns ═══════════════════
+    final canExport = r != null && !r.isEmpty;
+    return AdaptivePage(
+      title: title,
+      subtitle: context.str('pos_posanalysisscreen_top_bar_subtitle'),
+      fallbackRoute: Routes.posMore,
       actions: [
-        if (r != null && !r.isEmpty) IconButton(onPressed: _exporting ? null : () => _export(r), tooltip: 'PDF', icon: _exporting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2)) : const Icon(Icons.picture_as_pdf_outlined)),
+        if (canExport)
+          OutlinedButton.icon(
+            onPressed: _exporting ? null : () => _export(r),
+            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+            icon: _exporting ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2)) : const Icon(Icons.picture_as_pdf_outlined, size: 20),
+            label: const Text('PDF'),
+          ),
       ],
-      child: Column(children: [
-        Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 4), child: Align(alignment: AlignmentDirectional.centerStart, child: Text(context.str('pos_posanalysisscreen_top_bar_subtitle'), style: TextStyle(color: tk.text2)))),
-        SizedBox(
-          height: 50,
-          child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), children: [
-            for (final p in PosPeriod.values) Padding(padding: const EdgeInsetsDirectional.only(end: 8), child: ChoiceChip(label: Text(context.str(p.labelKey)), selected: p == _period, onSelected: (_) => setState(() => _period = p))),
-          ]),
-        ),
-        Expanded(child: RefreshIndicator(onRefresh: () async => ref.invalidate(posAnalyticsReportProvider(_period.value)), child: body)),
-      ]),
+      child: LayoutBuilder(builder: (context, box) {
+        final two = box.maxWidth >= 760;
+        Widget stack(List<Widget?> cards) {
+          final shown = [for (final c in cards) ?c];
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (var i = 0; i < shown.length; i++) ...[if (i > 0) const SizedBox(height: 16), shown[i]]]);
+        }
+
+        final Widget content = state() ??
+            ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 40),
+              children: [
+                kpiRow!,
+                const SizedBox(height: 16),
+                if (two)
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(flex: 7, child: stack([peakCard, categoryCard, bestCard])), const SizedBox(width: 16), Expanded(flex: 5, child: stack([paymentCard, staffCard]))])
+                else
+                  stack([peakCard, categoryCard, bestCard, paymentCard, staffCard]),
+              ],
+            );
+
+        return Column(children: [periodChips(hPad: 0), Expanded(child: RefreshIndicator(onRefresh: refresh, child: content))]);
+      }),
     );
   }
 }

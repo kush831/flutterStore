@@ -56,7 +56,8 @@ class GrowthChip extends StatelessWidget {
   }
 }
 
-/// Sales by the hour: a bar for each slot, the peak in the brand color.
+/// Sales by the hour: a bar for each slot, the peak in the brand color. A bar never grows wider than 44 px,
+/// so a single busy hour does not fill the whole card.
 class HourlyBars extends StatelessWidget {
   const HourlyBars({super.key, required this.peak});
 
@@ -71,17 +72,29 @@ class HourlyBars extends StatelessWidget {
     return SizedBox(
       height: 150,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           for (var i = 0; i < bars.length; i++)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-                  Expanded(child: Align(alignment: Alignment.bottomCenter, child: FractionallySizedBox(heightFactor: bars[i].fraction < 0.04 ? 0.04 : bars[i].fraction, child: Container(decoration: BoxDecoration(color: isPeakSlot(bars[i].slot, peak.peakHour) ? context.primary : context.primary.withValues(alpha: 0.28), borderRadius: const BorderRadius.vertical(top: Radius.circular(4)))))),),
-                  const SizedBox(height: 4),
-                  SizedBox(height: 14, child: i % step == 0 || isPeakSlot(bars[i].slot, peak.peakHour) ? FittedBox(child: Text(bars[i].slot.label, style: TextStyle(fontSize: 10, color: tk.text3))) : null),
-                ]),
+            Flexible(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 44),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: FractionallySizedBox(
+                          heightFactor: bars[i].fraction < 0.04 ? 0.04 : bars[i].fraction,
+                          child: Container(decoration: BoxDecoration(color: isPeakSlot(bars[i].slot, peak.peakHour) ? context.primary : context.primary.withValues(alpha: 0.28), borderRadius: const BorderRadius.vertical(top: Radius.circular(4)))),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    SizedBox(height: 14, child: i % step == 0 || isPeakSlot(bars[i].slot, peak.peakHour) ? FittedBox(child: Text(bars[i].slot.label, style: TextStyle(fontSize: 10, color: tk.text3))) : null),
+                  ]),
+                ),
               ),
             ),
         ],

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/adaptive_page.dart';
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/design/skeleton.dart';
 import '../../../core/network/error_text.dart';
@@ -18,16 +20,19 @@ import '../logic/pos_shift_logic.dart';
 import 'pos_widgets.dart';
 
 /// "Sessions" in the POS menu: the open shift with its numbers, and the actions that manage it. Jetpack's POSSessionScreen.
+/// Phone: one column. Tablet and browser: the store app's page header, the hero beside the live stats, and the actions as a grid of tiles.
 class PosSessionScreen extends ConsumerWidget {
   const PosSessionScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final async = ref.watch(posActiveSessionProvider);
     final session = async.value;
     final hasSession = session != null && session.isActive;
     final currency = ref.watch(posCurrencyProvider);
+    final staffName = ref.watch(posAuthProvider.select((s) => s.staff?.name ?? ''));
     final canViewAll = ref.watch(posAuthProvider.select((s) => s.can(PosPerm.viewAllSessions)));
 
     Future<void> refresh() async {
@@ -37,11 +42,13 @@ class PosSessionScreen extends ConsumerWidget {
       } catch (_) {}
     }
 
-    final Widget body;
+    // ── loading and failing: the same words on every width ───────────────────
     if (async.isLoading && async.value == null) {
-      body = const Padding(padding: EdgeInsets.all(16), child: SkeletonPulse(child: Column(children: [SkeletonBox(height: 150, radius: 16), SizedBox(height: 12), SkeletonBox(height: 90, radius: 16), SizedBox(height: 12), SkeletonBox(height: 200, radius: 16)])));
-    } else if (async.hasError && async.value == null) {
-      body = Padding(
+      const skeleton = Padding(padding: EdgeInsets.all(16), child: SkeletonPulse(child: Column(children: [SkeletonBox(height: 150, radius: 16), SizedBox(height: 12), SkeletonBox(height: 90, radius: 16), SizedBox(height: 12), SkeletonBox(height: 200, radius: 16)])));
+      return wide ? AdaptivePage(title: context.str('pos_possessiondashboardscreen_session'), child: skeleton) : PosPage(title: context.str('pos_possessiondashboardscreen_session'), child: skeleton);
+    }
+    if (async.hasError && async.value == null) {
+      final failed = Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.cloud_off_rounded, size: 48, color: tk.text3),
@@ -51,32 +58,41 @@ class PosSessionScreen extends ConsumerWidget {
           FilledButton.tonal(onPressed: refresh, child: Text(context.str('pos_posterminalscreen_try_again'))),
         ]),
       );
-    } else {
-      final actions = <_Action>[
-        if (hasSession) ...[
-          _Action(Icons.stop_circle_outlined, 'pos_possessiondashboardscreen_close_session', 'pos_possessiondashboardscreen_end_shift_reconcile_cash_drawer', Routes.posCloseSession, danger: true),
-          _Action(Icons.swap_horiz_rounded, 'pos_possessiondashboardscreen_handover_shift', 'pos_possessiondashboardscreen_pass_terminal_to_incoming_staff', Routes.posHandover),
-          _Action(Icons.sync_alt_rounded, 'pos_possessiondashboardscreen_transfer_terminal', 'pos_possessiondashboardscreen_move_session_to_working_terminal', Routes.posTransfer),
-        ],
-        _Action(Icons.history_rounded, 'pos_possessiondashboardscreen_my_shift_history', 'pos_possessiondashboardscreen_your_past_shifts_summaries', Routes.posShiftHistory),
-        if (canViewAll) _Action(Icons.groups_2_outlined, 'pos_possessiondashboardscreen_all_sessions', 'pos_possessiondashboardscreen_all_active_sessions_force_transfer', Routes.posAllSessions),
-      ];
-      body = ListView(
+      return wide ? AdaptivePage(title: context.str('pos_possessiondashboardscreen_session'), child: Center(child: failed)) : PosPage(title: context.str('pos_possessiondashboardscreen_session'), child: failed);
+    }
+
+    final actions = <_Action>[
+      if (hasSession) ...[
+        _Action(Icons.stop_circle_outlined, 'pos_possessiondashboardscreen_close_session', 'pos_possessiondashboardscreen_end_shift_reconcile_cash_drawer', Routes.posCloseSession, danger: true),
+        _Action(Icons.swap_horiz_rounded, 'pos_possessiondashboardscreen_handover_shift', 'pos_possessiondashboardscreen_pass_terminal_to_incoming_staff', Routes.posHandover),
+        _Action(Icons.sync_alt_rounded, 'pos_possessiondashboardscreen_transfer_terminal', 'pos_possessiondashboardscreen_move_session_to_working_terminal', Routes.posTransfer),
+      ],
+      _Action(Icons.history_rounded, 'pos_possessiondashboardscreen_my_shift_history', 'pos_possessiondashboardscreen_your_past_shifts_summaries', Routes.posShiftHistory),
+      if (canViewAll) _Action(Icons.groups_2_outlined, 'pos_possessiondashboardscreen_all_sessions', 'pos_possessiondashboardscreen_all_active_sessions_force_transfer', Routes.posAllSessions),
+    ];
+
+    final ordersStat = hasSession ? PosStat(label: context.str('pos_possessiondashboardscreen_stat_orders'), value: session.totalOrders.isEmpty ? '0' : session.totalOrders) : null;
+    final cashStat = hasSession ? PosStat(label: context.str('pos_possessiondashboardscreen_stat_cash_sales'), value: money(currency, session.totalCashSales.isEmpty ? '0' : session.totalCashSales)) : null;
+
+    Widget grid(int cols) => LayoutBuilder(builder: (context, box) {
+      final w = (box.maxWidth - 12 * (cols - 1)) / cols;
+      return Wrap(spacing: 12, runSpacing: 12, children: [for (final a in actions) SizedBox(width: w, child: _ActionCard(a: a, onTap: () => context.push(a.route)))]);
+    });
+
+    // ══ phone: exactly what it was ════════════════════════════════════════════
+    if (!wide) {
+      final body = ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          if (hasSession) _SessionHero(s: session, currency: currency) else _NoSession(),
+          if (hasSession) _SessionHero(s: session, currency: currency) else const _NoSession(),
           if (hasSession) ...[
             const SizedBox(height: 18),
-            _Label('pos_possessiondashboardscreen_live_stats'),
-            Row(children: [
-              Expanded(child: PosStat(label: context.str('pos_possessiondashboardscreen_stat_orders'), value: session.totalOrders.isEmpty ? '0' : session.totalOrders)),
-              const SizedBox(width: 10),
-              Expanded(child: PosStat(label: context.str('pos_possessiondashboardscreen_stat_cash_sales'), value: money(currency, session.totalCashSales.isEmpty ? '0' : session.totalCashSales))),
-            ]),
+            const _Label('pos_possessiondashboardscreen_live_stats'),
+            Row(children: [Expanded(child: ordersStat!), const SizedBox(width: 10), Expanded(child: cashStat!)]),
           ],
           const SizedBox(height: 18),
-          _Label('pos_possessiondashboardscreen_manage_session'),
+          const _Label('pos_possessiondashboardscreen_manage_session'),
           LayoutBuilder(builder: (context, box) {
             final cols = box.maxWidth >= 520 ? 2 : 1;
             final w = (box.maxWidth - 10 * (cols - 1)) / cols;
@@ -84,9 +100,49 @@ class PosSessionScreen extends ConsumerWidget {
           }),
         ],
       );
+      return PosPage(title: context.str('pos_possessiondashboardscreen_session'), child: RefreshIndicator(onRefresh: refresh, child: body));
     }
 
-    return PosPage(title: context.str('pos_possessiondashboardscreen_session'), child: RefreshIndicator(onRefresh: refresh, child: body));
+    // ══ tablet and browser ════════════════════════════════════════════════════
+    final body = LayoutBuilder(builder: (context, box) {
+      final side = box.maxWidth >= 700;
+      final cols = box.maxWidth >= 900 ? 3 : 2;
+      return RefreshIndicator(
+        onRefresh: refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 40),
+          children: [
+            if (!hasSession)
+              Center(child: ConstrainedBox(constraints: BoxConstraints(maxWidth: 560), child: _NoSession()))
+            else if (side)
+            // the hero beside the live stats
+              IntrinsicHeight(
+                child: PosEqualRow(children: [
+                  Expanded(flex: 6, child: _SessionHero(s: session, currency: currency)),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 5, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(child: ordersStat!), const SizedBox(height: 12), Expanded(child: cashStat!)])),
+                ]),
+              )
+            else ...[
+                _SessionHero(s: session, currency: currency),
+                const SizedBox(height: 12),
+                PosEqualRow(children: [Expanded(child: ordersStat!), const SizedBox(width: 12), Expanded(child: cashStat!)]),
+              ],
+            const SizedBox(height: 24),
+            const _Label('pos_possessiondashboardscreen_manage_session'),
+            grid(cols),
+          ],
+        ),
+      );
+    });
+
+    return AdaptivePage(
+      title: context.str('pos_possessiondashboardscreen_session'),
+      subtitle: hasSession ? [if (session.terminalName.isNotEmpty) session.terminalName, if (staffName.isNotEmpty) staffName].join(' · ') : null,
+      actions: [if (hasSession) PosChip(context.str('pos_possessiondashboardscreen_active_session'), tk.success)],
+      child: body,
+    );
   }
 }
 
@@ -169,6 +225,7 @@ class _SessionHero extends StatelessWidget {
       decoration: BoxDecoration(color: brand, borderRadius: BorderRadius.circular(Radii.lg)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(children: [
             Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4), decoration: BoxDecoration(color: on.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(50)), child: Text(context.str('pos_possessiondashboardscreen_active_session'), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: on))),
@@ -187,6 +244,8 @@ class _SessionHero extends StatelessWidget {
 }
 
 class _NoSession extends StatelessWidget {
+  const _NoSession();
+
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;

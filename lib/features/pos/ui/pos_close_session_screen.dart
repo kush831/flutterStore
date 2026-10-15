@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/adaptive_page.dart';
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/network/error_text.dart';
 import '../../../core/router/routes.dart';
@@ -19,6 +21,7 @@ import '../logic/pos_shift_logic.dart';
 import 'pos_widgets.dart';
 
 /// End the shift: count the cash, confirm, and see the result. Jetpack's "close_session".
+/// Phone: one column. Tablet and browser: the store app's page header, the shift's figures on the left and the cash count on the right.
 class PosCloseSessionScreen extends ConsumerStatefulWidget {
   const PosCloseSessionScreen({super.key});
 
@@ -91,14 +94,16 @@ class _PosCloseSessionScreenState extends ConsumerState<PosCloseSessionScreen> {
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final async = ref.watch(posActiveSessionProvider);
     final s = async.value;
     final currency = ref.watch(posCurrencyProvider);
     String m(double v) => money(currency, posAmountText(v));
+    final title = context.str('pos_posclosesessionscreen_close_session');
 
-    final Widget body;
+    // ── no open shift: the same words on every width ─────────────────────────
     if (s == null || !s.isActive) {
-      body = Center(
+      final Widget empty = Center(
         child: async.isLoading
             ? const CircularProgressIndicator()
             : Padding(
@@ -106,74 +111,130 @@ class _PosCloseSessionScreenState extends ConsumerState<PosCloseSessionScreen> {
           child: Text(context.str('pos_posclosesessionscreen_session_data_not_available'), textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: tk.text2)),
         ),
       );
-    } else {
-      final expected = expectedCash(s.openingCash, s.totalCashSales);
-      final valid = cashValid(_counted.text);
-      final status = cashStatus(cashDifference(_counted.text, expected));
-      final brand = context.primary;
-      final on = onColor(brand);
-
-      Widget row(String key, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: Row(children: [Expanded(child: Text(context.str(key), style: TextStyle(color: tk.text2))), Text(value, style: TextStyle(fontWeight: FontWeight.w700, color: tk.text1))]),
-      );
-
-      body = ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(color: brand, borderRadius: BorderRadius.circular(Radii.lg)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(context.str('pos_posclosesessionscreen_in_drawer'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: on.withValues(alpha: 0.8))),
-              const SizedBox(height: 4),
-              FittedBox(fit: BoxFit.scaleDown, alignment: AlignmentDirectional.centerStart, child: Text(m(expected), style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.6, color: on))),
-              Text(context.str('pos_possessiondashboardscreen_expected_cash'), style: TextStyle(fontSize: 12, color: on.withValues(alpha: 0.85))),
-            ]),
-          ),
-          const SizedBox(height: 14),
-          Card(
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Column(children: [
-                row('pos_posclosesessionscreen_total_orders', s.totalOrders.isEmpty ? '0' : s.totalOrders),
-                Divider(height: 1, color: tk.border),
-                row('pos_possessiondetailscreen_info_opening_cash', m(posNum(s.openingCash))),
-                Divider(height: 1, color: tk.border),
-                row('pos_posclosesessionscreen_cash_sales', m(posNum(s.totalCashSales))),
-              ]),
-            ),
-          ),
-          const SizedBox(height: 22),
-          Padding(padding: const EdgeInsets.only(left: 4, bottom: 8), child: Text(context.str('pos_posclosesessionscreen_counted_cash'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: tk.text3))),
-          TextField(
-            controller: _counted,
-            enabled: !_busy,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-            onChanged: (_) => setState(() => _error = null),
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-            decoration: InputDecoration(prefixText: currency.isEmpty ? null : '$currency ', hintText: '0'),
-          ),
-          if (valid) ...[
-            const SizedBox(height: 10),
-            Align(alignment: AlignmentDirectional.centerStart, child: PosChip(status == CashStatus.balanced ? context.str(cashStatusKey(status)) : '${context.str(cashStatusKey(status))}  ·  ${m(cashDifference(_counted.text, expected).abs())}', cashStatusColor(context, status))),
-          ],
-          if (_error != null) ...[const SizedBox(height: 14), PosErrorBox(_error!)],
-          const SizedBox(height: 22),
-          FilledButton(
-            onPressed: (valid && !_busy) ? () => _confirm(s, expected, currency) : null,
-            style: FilledButton.styleFrom(backgroundColor: tk.danger, minimumSize: const Size(0, 54)),
-            child: _busy
-                ? Row(mainAxisSize: MainAxisSize.min, children: [const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white)), const SizedBox(width: 10), Text(context.str('pos_posclosesessionscreen_close_closing'))])
-                : Text(context.str('pos_posclosesessionscreen_close_session')),
-          ),
-        ],
-      );
+      return wide ? AdaptivePage(title: title, fallbackRoute: Routes.posSessions, child: empty) : PosPage(title: title, back: Routes.posSessions, child: empty);
     }
 
-    return PosPage(title: context.str('pos_posclosesessionscreen_close_session'), back: Routes.posSessions, child: body);
+    // ── the pieces ───────────────────────────────────────────────────────────
+    final expected = expectedCash(s.openingCash, s.totalCashSales);
+    final valid = cashValid(_counted.text);
+    final status = cashStatus(cashDifference(_counted.text, expected));
+    final brand = context.primary;
+    final on = onColor(brand);
+
+    Widget row(String key, String value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(children: [Expanded(child: Text(context.str(key), style: TextStyle(color: tk.text2))), Text(value, style: TextStyle(fontWeight: FontWeight.w700, color: tk.text1))]),
+    );
+
+    final hero = Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: brand, borderRadius: BorderRadius.circular(Radii.lg)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(context.str('pos_posclosesessionscreen_in_drawer'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: on.withValues(alpha: 0.8))),
+        const SizedBox(height: 4),
+        FittedBox(fit: BoxFit.scaleDown, alignment: AlignmentDirectional.centerStart, child: Text(m(expected), style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.6, color: on))),
+        Text(context.str('pos_possessiondashboardscreen_expected_cash'), style: TextStyle(fontSize: 12, color: on.withValues(alpha: 0.85))),
+      ]),
+    );
+
+    final summary = Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Column(children: [
+          row('pos_posclosesessionscreen_total_orders', s.totalOrders.isEmpty ? '0' : s.totalOrders),
+          Divider(height: 1, color: tk.border),
+          row('pos_possessiondetailscreen_info_opening_cash', m(posNum(s.openingCash))),
+          Divider(height: 1, color: tk.border),
+          row('pos_posclosesessionscreen_cash_sales', m(posNum(s.totalCashSales))),
+        ]),
+      ),
+    );
+
+    final countLabel = Padding(padding: const EdgeInsets.only(left: 4, bottom: 8), child: Text(context.str('pos_posclosesessionscreen_counted_cash'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: tk.text3)));
+
+    final countField = TextField(
+      controller: _counted,
+      enabled: !_busy,
+      autofocus: true,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+      onChanged: (_) => setState(() => _error = null),
+      onSubmitted: (_) {
+        if (valid && !_busy) _confirm(s, expected, currency);
+      },
+      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+      decoration: InputDecoration(prefixText: currency.isEmpty ? null : '$currency ', hintText: '0'),
+    );
+
+    final liveStatus = valid ? Align(alignment: AlignmentDirectional.centerStart, child: PosChip(status == CashStatus.balanced ? context.str(cashStatusKey(status)) : '${context.str(cashStatusKey(status))}  ·  ${m(cashDifference(_counted.text, expected).abs())}', cashStatusColor(context, status))) : null;
+
+    final confirmButton = FilledButton(
+      onPressed: (valid && !_busy) ? () => _confirm(s, expected, currency) : null,
+      style: FilledButton.styleFrom(backgroundColor: tk.danger, minimumSize: const Size(0, 54)),
+      child: _busy
+          ? Row(mainAxisSize: MainAxisSize.min, children: [const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white)), const SizedBox(width: 10), Text(context.str('pos_posclosesessionscreen_close_closing'))])
+          : Text(context.str('pos_posclosesessionscreen_close_session')),
+    );
+
+    // ══ phone: exactly what it was ════════════════════════════════════════════
+    if (!wide) {
+      final body = ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          hero,
+          const SizedBox(height: 14),
+          summary,
+          const SizedBox(height: 22),
+          countLabel,
+          countField,
+          if (liveStatus != null) ...[const SizedBox(height: 10), liveStatus],
+          if (_error != null) ...[const SizedBox(height: 14), PosErrorBox(_error!)],
+          const SizedBox(height: 22),
+          confirmButton,
+        ],
+      );
+      return PosPage(title: title, back: Routes.posSessions, child: body);
+    }
+
+    // ══ tablet and browser ════════════════════════════════════════════════════
+    final shiftFigures = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [hero, const SizedBox(height: 14), summary]);
+
+    final cashCount = Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          countLabel,
+          countField,
+          if (liveStatus != null) ...[const SizedBox(height: 12), liveStatus],
+          if (_error != null) ...[const SizedBox(height: 14), PosErrorBox(_error!)],
+          const SizedBox(height: 20),
+          confirmButton,
+        ]),
+      ),
+    );
+
+    final body = LayoutBuilder(builder: (context, box) {
+      final two = box.maxWidth >= 700;
+      return SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 40),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1000),
+            child: two
+                ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: shiftFigures), const SizedBox(width: 20), Expanded(child: cashCount)])
+                : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [shiftFigures, const SizedBox(height: 16), cashCount]),
+          ),
+        ),
+      );
+    });
+
+    return AdaptivePage(
+      title: title,
+      subtitle: [if (s.terminalName.isNotEmpty) s.terminalName, formatLength(sessionLength(s.loginAt, DateTime.now()))].where((x) => x.isNotEmpty).join(' · '),
+      fallbackRoute: Routes.posSessions,
+      child: body,
+    );
   }
 }

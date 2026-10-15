@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/design/app_snack.dart';
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/network/error_text.dart';
 import '../../../core/router/routes.dart';
@@ -15,6 +16,7 @@ import '../logic/pos_shift_logic.dart';
 import 'pos_receipt_actions.dart';
 
 /// "Payment Successful!": the order number, how it was paid, the change, and what to do next. Jetpack's POSOrderSuccessScreen.
+/// Phone: one column. Tablet and browser: one card in the middle, the result on the left and the actions on the right.
 class PosOrderSuccessScreen extends ConsumerStatefulWidget {
   const PosOrderSuccessScreen({super.key});
 
@@ -46,6 +48,7 @@ class _PosOrderSuccessScreenState extends ConsumerState<PosOrderSuccessScreen> {
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final sale = ref.watch(posLastSaleProvider);
     final currency = ref.watch(posCurrencyProvider);
     if (sale == null) return const SizedBox.shrink();
@@ -62,6 +65,61 @@ class _PosOrderSuccessScreenState extends ConsumerState<PosOrderSuccessScreen> {
       ),
     );
 
+    // ── the result: the check, the order, the money ──────────────────────────
+    final result = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Center(child: Container(width: 84, height: 84, decoration: BoxDecoration(color: tk.success.withValues(alpha: 0.14), shape: BoxShape.circle), child: Icon(Icons.check_rounded, size: 50, color: tk.success))),
+      const SizedBox(height: 18),
+      Text(context.str('pos_pospaymentscreen_success_title'), textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: tk.text1)),
+      const SizedBox(height: 6),
+      if (sale.orderNumber.isNotEmpty) Text('${context.str('pos_posreceiptscreen_label_order_number')} ${sale.orderNumber}', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: tk.text2)),
+      if (sale.totalText.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 14), child: Text(sale.totalText, textAlign: TextAlign.center, style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: tk.text1))),
+      if (sale.methodName.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(context.str('pos_pospaymentscreen_success_paid_via', [sale.methodName]), textAlign: TextAlign.center, style: TextStyle(color: tk.text2))),
+      if (sale.changeDue != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(context.str('pos_pospaymentscreen_success_change', [money(currency, posAmountText(sale.changeDue!))]), textAlign: TextAlign.center, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: tk.success))),
+    ]);
+
+    // ── the actions ──────────────────────────────────────────────────────────
+    final viewReceipt = FilledButton(onPressed: () => context.push('${Routes.posReceipt}/${Uri.encodeComponent(sale.orderId)}'), style: FilledButton.styleFrom(minimumSize: const Size(0, 54)), child: Text(context.str('pos_pospaymentscreen_success_view_receipt')));
+    final print = OutlinedButton.icon(onPressed: _busy ? null : () => _do((a) => a.print()), style: OutlinedButton.styleFrom(minimumSize: const Size(0, 50)), icon: const Icon(Icons.print_outlined), label: Text(context.str('pos_pospaymentscreen_success_print')));
+    final sendLabel = Text(context.str('pos_pospaymentscreen_success_send_receipt'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: tk.text3));
+    final sendRow = Row(children: [
+      square(Icons.chat_bubble_outline_rounded, 'pos_pospaymentscreen_success_sms', () => _do((a) => a.sms())),
+      const SizedBox(width: 10),
+      square(Icons.mail_outline_rounded, 'pos_pospaymentscreen_success_email', () => _do((a) => a.email())),
+    ]);
+    final progress = _busy ? const Padding(padding: EdgeInsets.only(top: 14), child: LinearProgressIndicator(minHeight: 3)) : const SizedBox.shrink();
+    final newSale = TextButton(onPressed: () => context.go(Routes.posProducts), child: Text(context.str('pos_pospaymentscreen_success_new_sale')));
+
+    // ── the page: one column, or one card with two ───────────────────────────
+    final Widget content;
+    if (!wide) {
+      content = ListView(
+        padding: const EdgeInsets.fromLTRB(20, 32, 20, 32),
+        children: [result, const SizedBox(height: 26), viewReceipt, const SizedBox(height: 10), print, const SizedBox(height: 18), sendLabel, const SizedBox(height: 8), sendRow, progress, const SizedBox(height: 26), newSale],
+      );
+    } else {
+      content = SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: LayoutBuilder(builder: (context, box) {
+                  final two = box.maxWidth >= 560;
+                  final actions = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [viewReceipt, const SizedBox(height: 10), print, const SizedBox(height: 18), sendLabel, const SizedBox(height: 8), sendRow, progress, const SizedBox(height: 14), newSale]);
+                  return two
+                      ? Row(crossAxisAlignment: CrossAxisAlignment.center, children: [Expanded(child: result), const SizedBox(width: 28), Expanded(child: actions)])
+                      : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [result, const SizedBox(height: 24), actions]);
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -69,41 +127,7 @@ class _PosOrderSuccessScreenState extends ConsumerState<PosOrderSuccessScreen> {
       },
       child: Scaffold(
         backgroundColor: tk.canvas,
-        body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 32, 20, 32),
-                children: [
-                  Center(child: Container(width: 84, height: 84, decoration: BoxDecoration(color: tk.success.withValues(alpha: 0.14), shape: BoxShape.circle), child: Icon(Icons.check_rounded, size: 50, color: tk.success))),
-                  const SizedBox(height: 18),
-                  Text(context.str('pos_pospaymentscreen_success_title'), textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: tk.text1)),
-                  const SizedBox(height: 6),
-                  if (sale.orderNumber.isNotEmpty) Text('${context.str('pos_posreceiptscreen_label_order_number')} ${sale.orderNumber}', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: tk.text2)),
-                  if (sale.totalText.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 14), child: Text(sale.totalText, textAlign: TextAlign.center, style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: tk.text1))),
-                  if (sale.methodName.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(context.str('pos_pospaymentscreen_success_paid_via', [sale.methodName]), textAlign: TextAlign.center, style: TextStyle(color: tk.text2))),
-                  if (sale.changeDue != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(context.str('pos_pospaymentscreen_success_change', [money(currency, posAmountText(sale.changeDue!))]), textAlign: TextAlign.center, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: tk.success))),
-                  const SizedBox(height: 26),
-                  FilledButton(onPressed: () => context.push('${Routes.posReceipt}/${Uri.encodeComponent(sale.orderId)}'), style: FilledButton.styleFrom(minimumSize: const Size(0, 54)), child: Text(context.str('pos_pospaymentscreen_success_view_receipt'))),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(onPressed: _busy ? null : () => _do((a) => a.print()), style: OutlinedButton.styleFrom(minimumSize: const Size(0, 50)), icon: const Icon(Icons.print_outlined), label: Text(context.str('pos_pospaymentscreen_success_print'))),
-                  const SizedBox(height: 18),
-                  Text(context.str('pos_pospaymentscreen_success_send_receipt'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: tk.text3)),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    square(Icons.chat_bubble_outline_rounded, 'pos_pospaymentscreen_success_sms', () => _do((a) => a.sms())),
-                    const SizedBox(width: 10),
-                    square(Icons.mail_outline_rounded, 'pos_pospaymentscreen_success_email', () => _do((a) => a.email())),
-                  ]),
-                  if (_busy) const Padding(padding: EdgeInsets.only(top: 14), child: LinearProgressIndicator(minHeight: 3)),
-                  const SizedBox(height: 26),
-                  TextButton(onPressed: () => context.go(Routes.posProducts), child: Text(context.str('pos_pospaymentscreen_success_new_sale'))),
-                ],
-              ),
-            ),
-          ),
-        ),
+        body: SafeArea(child: wide ? content : Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 480), child: content))),
       ),
     );
   }

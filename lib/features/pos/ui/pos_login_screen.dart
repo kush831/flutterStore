@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/breakpoints.dart';
 import '../../../core/design/design_tokens.dart';
 import '../../../core/network/error_text.dart';
 import '../../../core/router/routes.dart';
@@ -14,6 +15,8 @@ import '../data/pos_repository.dart';
 import '../logic/pos_auth.dart';
 import '../logic/pos_logic.dart';
 
+/// The POS staff login: phone and a 4-digit PIN.
+/// Phone: the form on the screen itself. Tablet and browser: the same form in a card in the middle.
 class PosLoginScreen extends ConsumerStatefulWidget {
   const PosLoginScreen({super.key});
 
@@ -92,8 +95,83 @@ class _PosLoginScreenState extends ConsumerState<PosLoginScreen> {
   @override
   Widget build(BuildContext context) {
     final tk = context.tk;
+    final wide = !context.screen.isCompact;
     final c = _current;
     final ready = posLoginReady(_phone.text, _pin.text) && !_busy;
+
+    final form = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: Container(width: 72, height: 72, decoration: BoxDecoration(color: context.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)), child: Icon(Icons.point_of_sale_rounded, size: 36, color: context.primary)),
+        ),
+        const SizedBox(height: 18),
+        Text(context.str('pos_posverifypinscreen_staff_login'), textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6, color: tk.text1)),
+        const SizedBox(height: 8),
+        Text(context.str('pos_posverifypinscreen_terminal_description'), textAlign: TextAlign.center, style: TextStyle(color: tk.text2, height: 1.45)),
+        const SizedBox(height: 28),
+        Text(context.str('pos_posverifypinscreen_phone_number'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tk.text2)),
+        const SizedBox(height: 6),
+        Row(children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(Radii.md),
+            onTap: (_busy || _countries.isEmpty) ? null : _pickCountry,
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(color: tk.surface, borderRadius: BorderRadius.circular(Radii.md), border: Border.all(color: tk.border)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (c != null && c.flag.isNotEmpty) Text(c.flag, style: const TextStyle(fontSize: 20)),
+                const SizedBox(width: 6),
+                Text(c?.dial ?? '+', style: TextStyle(fontWeight: FontWeight.w700, color: tk.text1)),
+                if (_countries.length > 1) Icon(Icons.arrow_drop_down_rounded, color: tk.text3),
+              ]),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: _phone,
+              enabled: !_busy,
+              keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
+              onChanged: (_) => setState(() => _error = null),
+              decoration: InputDecoration(hintText: context.str('pos_posverifypinscreen_mobile_number_placeholder')),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 22),
+        Text(context.str('pos_posverifypinscreen_4_digit_pin'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tk.text2)),
+        const SizedBox(height: 8),
+        _PinBoxes(controller: _pin, focus: _pinFocus, enabled: !_busy, hasError: _error != null, height: wide ? 68 : 62, onChanged: () => setState(() => _error = null), onDone: ready ? _submit : null),
+        if (_error != null) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: tk.dangerBg, borderRadius: BorderRadius.circular(Radii.md)),
+            child: Row(children: [Icon(Icons.error_outline_rounded, size: 18, color: tk.danger), const SizedBox(width: 8), Expanded(child: Text(_error!, style: TextStyle(color: tk.danger, fontSize: 13)))]),
+          ),
+        ],
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: ready ? _submit : null,
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 54)),
+          child: _busy
+              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+              : Text(context.str('pos_posverifypinscreen_verify_pin')),
+        ),
+        const SizedBox(height: 18),
+        Center(
+          child: Text.rich(
+            TextSpan(children: [
+              TextSpan(text: '${context.str('pos_posverifypinscreen_forgot_pin')} ', style: TextStyle(color: tk.text3)),
+              TextSpan(text: context.str('pos_posverifypinscreen_ask_manager'), style: TextStyle(color: tk.text1, fontWeight: FontWeight.w700)),
+            ]),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    );
 
     return Scaffold(
       backgroundColor: tk.canvas,
@@ -108,80 +186,9 @@ class _PosLoginScreenState extends ConsumerState<PosLoginScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(width: 72, height: 72, decoration: BoxDecoration(color: context.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)), child: Icon(Icons.point_of_sale_rounded, size: 36, color: context.primary)),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(context.str('pos_posverifypinscreen_staff_login'), textAlign: TextAlign.center, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6, color: tk.text1)),
-                  const SizedBox(height: 8),
-                  Text(context.str('pos_posverifypinscreen_terminal_description'), textAlign: TextAlign.center, style: TextStyle(color: tk.text2, height: 1.45)),
-                  const SizedBox(height: 28),
-                  Text(context.str('pos_posverifypinscreen_phone_number'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tk.text2)),
-                  const SizedBox(height: 6),
-                  Row(children: [
-                    InkWell(
-                      borderRadius: BorderRadius.circular(Radii.md),
-                      onTap: (_busy || _countries.isEmpty) ? null : _pickCountry,
-                      child: Container(
-                        height: 52,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(color: tk.surface, borderRadius: BorderRadius.circular(Radii.md), border: Border.all(color: tk.border)),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          if (c != null && c.flag.isNotEmpty) Text(c.flag, style: const TextStyle(fontSize: 20)),
-                          const SizedBox(width: 6),
-                          Text(c?.dial ?? '+', style: TextStyle(fontWeight: FontWeight.w700, color: tk.text1)),
-                          if (_countries.length > 1) Icon(Icons.arrow_drop_down_rounded, color: tk.text3),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _phone,
-                        enabled: !_busy,
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
-                        onChanged: (_) => setState(() => _error = null),
-                        decoration: InputDecoration(hintText: context.str('pos_posverifypinscreen_mobile_number_placeholder')),
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 22),
-                  Text(context.str('pos_posverifypinscreen_4_digit_pin'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tk.text2)),
-                  const SizedBox(height: 8),
-                  _PinBoxes(controller: _pin, focus: _pinFocus, enabled: !_busy, hasError: _error != null, onChanged: () => setState(() => _error = null), onDone: ready ? _submit : null),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: tk.dangerBg, borderRadius: BorderRadius.circular(Radii.md)),
-                      child: Row(children: [Icon(Icons.error_outline_rounded, size: 18, color: tk.danger), const SizedBox(width: 8), Expanded(child: Text(_error!, style: TextStyle(color: tk.danger, fontSize: 13)))]),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: ready ? _submit : null,
-                    style: FilledButton.styleFrom(minimumSize: const Size(0, 54)),
-                    child: _busy
-                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                        : Text(context.str('pos_posverifypinscreen_verify_pin')),
-                  ),
-                  const SizedBox(height: 18),
-                  Center(
-                    child: Text.rich(
-                      TextSpan(children: [
-                        TextSpan(text: '${context.str('pos_posverifypinscreen_forgot_pin')} ', style: TextStyle(color: tk.text3)),
-                        TextSpan(text: context.str('pos_posverifypinscreen_ask_manager'), style: TextStyle(color: tk.text1, fontWeight: FontWeight.w700)),
-                      ]),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
+              constraints: BoxConstraints(maxWidth: wide ? 480 : 440),
+              // on a tablet and a browser the form sits in a card, like a website's sign-in
+              child: wide ? Card(margin: EdgeInsets.zero, child: Padding(padding: const EdgeInsets.fromLTRB(32, 32, 32, 28), child: form)) : form,
             ),
           ),
         ),
@@ -192,12 +199,13 @@ class _PosLoginScreenState extends ConsumerState<PosLoginScreen> {
 
 /// Four boxes over one invisible text field: paste, autofill and the keyboard's "done" all work.
 class _PinBoxes extends StatelessWidget {
-  const _PinBoxes({required this.controller, required this.focus, required this.enabled, required this.hasError, required this.onChanged, required this.onDone});
+  const _PinBoxes({required this.controller, required this.focus, required this.enabled, required this.hasError, required this.onChanged, required this.onDone, this.height = 62});
 
   final TextEditingController controller;
   final FocusNode focus;
   final bool enabled;
   final bool hasError;
+  final double height;
   final VoidCallback onChanged;
   final VoidCallback? onDone;
 
@@ -209,7 +217,7 @@ class _PinBoxes extends StatelessWidget {
     return GestureDetector(
       onTap: enabled ? focus.requestFocus : null,
       child: SizedBox(
-        height: 62,
+        height: height,
         child: Stack(
           children: [
             Row(

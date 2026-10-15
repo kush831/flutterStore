@@ -8,17 +8,18 @@ import '../logic/pos_catalog_providers.dart';
 import 'pos_product_card.dart';
 
 /// The paged product grid of one category (empty id = All) and sub-category. Scrolling loads the next page.
+/// The columns follow the width: as many 210 px cards as fit.
 class PosProductGrid extends ConsumerWidget {
-  const PosProductGrid({super.key, required this.productsKey});
+  const PosProductGrid({super.key, required this.productsKey, this.padding = const EdgeInsets.fromLTRB(12, 8, 12, 8)});
 
   final PosProductsKey productsKey;
+  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final st = ref.watch(posProductsProvider(productsKey));
     final ctrl = ref.read(posProductsProvider(productsKey).notifier);
     final items = st.items;
-    final tk = context.tk;
 
     if (st.showShimmer) return const Center(child: CircularProgressIndicator());
     if (st.showError) return FinanceMessage(icon: Icons.cloud_off_rounded, title: context.str('common_allscreen_something_went_wrong'), actionKey: 'pos_posanalysisscreen_retry_button', onAction: ctrl.refresh);
@@ -36,7 +37,7 @@ class PosProductGrid extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              padding: padding,
               sliver: SliverGrid.builder(
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 210, mainAxisSpacing: 10, crossAxisSpacing: 10, mainAxisExtent: 285),
                 itemCount: items.length,
@@ -44,7 +45,7 @@ class PosProductGrid extends ConsumerWidget {
               ),
             ),
             SliverToBoxAdapter(child: ListFooter(hasMore: st.hasMore, loading: st.isLoadingMore, failed: st.loadMoreError != null, onRetry: ctrl.loadMore)),
-            SliverToBoxAdapter(child: SizedBox(height: tk.hashCode == 0 ? 0 : 12)),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
           ],
         ),
       ),
